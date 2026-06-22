@@ -1,0 +1,26 @@
+# Standalone self-signed TLS probe — NO Confluence, NO license required.
+#
+# Brings up a single nginx that serves static Confluence-shaped JSON over a
+# self-signed certificate on :8444. This lets the SSL_CERT_FILE / --insecure
+# behavior be verified fully automatically (no setup wizard, no PAT), unlike the
+# full stack in docker-compose.yml.
+#
+# Usage:
+#   make -C test/e2e certs       # generate the self-signed cert (shared)
+#   make -C test/e2e tls-up      # start the mock TLS server
+#   make -C test/e2e tls-test    # run the automated self-signed TLS test
+#   make -C test/e2e tls-down    # stop it
+
+services:
+  tls-mock:
+    image: nginx:1.27-alpine
+    ports:
+      - "8444:8444"
+    volumes:
+      - ./nginx/tls-mock.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://localhost:8444/rest/api/space >/dev/null 2>&1 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

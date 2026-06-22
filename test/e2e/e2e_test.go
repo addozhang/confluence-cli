@@ -258,3 +258,76 @@ func hostKey(rawURL string) string {
 	}
 	return u
 }
+
+// TestE2E_SelfSigned_TLS_Mock verifies SSL_CERT_FILE and --insecure against the
+// standalone self-signed TLS mock (test/e2e/docker-compose.tls.yml), which
+// serves static Confluence-shaped JSON and needs NO Confluence and NO license.
+//
+// Unlike TestE2E_SelfSigned_TLS, this does not require a PAT or a real space, so
+// it can run fully automatically. It is configured independently:
+//
+//	CFL_E2E_TLS_MOCK_URL  https://localhost:8444
+//	CFL_E2E_CA_FILE       test/e2e/certs/wiki.local.crt
+//
+// It skips when CFL_E2E_TLS_MOCK_URL is unset.
+func TestE2E_SelfSigned_TLS_Mock(t *testing.T) {
+	mockURL := strings.TrimSpace(os.Getenv("CFL_E2E_TLS_MOCK_URL"))
+	caFile := strings.TrimSpace(os.Getenv("CFL_E2E_CA_FILE"))
+	if mockURL == "" {
+		t.Skip("TLS mock not configured (set CFL_E2E_TLS_MOCK_URL, e.g. https://localhost:8444); skipping")
+	}
+	if caFile == "" {
+		t.Fatal("CFL_E2E_TLS_MOCK_URL is set but CFL_E2E_CA_FILE is missing")
+	}
+	caAbs, err := filepath.Abs(caFile)
+	if err != nil {
+		t.Fatalf("abs ca file: %v", err)
+	}
+
+	// Build cfl and seed a credential for the mock host (any token works; the
+	// mock does not check Authorization).
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "cfl")
+	if out, berr := exec.Command("go", "build", "-o", binary, "../../cmd/cfl").CombinedOutput(); berr != nil {
+		t.Fatalf("build cfl: %v\n%s", berr, out)
+	}
+	creds := filepath.Join(dir, "credentials")
+	if werr := os.WriteFile(creds,
+		[]byte("[tokens]\n  \""+hostKey(mockURL)+"\" = \"tls-probe-token\"\n"), 0o600); werr != nil {
+		t.Fatalf("seed credentials: %v", werr)
+	}
+
+	run := func(wantErr bool, extraEnv []string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command(binary, args...)
+		cmd.Env = append(os.Environ(), "CFL_TEST_CREDENTIALS="+creds)
+		cmd.Env = append(cmd.Env, extraEnv...)
+		out, rerr := cmd.CombinedOutput()
+		if wantErr && rerr == nil {
+			t.Fatalf("expected `cfl %s` to fail, got success:\n%s", strings.Join(args, " "), out)
+		}
+		if !wantErr && rerr != nil {
+			t.Fatalf("`cfl %s` failed: %v\n%s", strings.Join(args, " "), rerr, out)
+		}
+		return string(out)
+	}
+
+	// 1. SSL_CERT_FILE makes cfl trust the self-signed cert with no flag.
+	out := run(false, []string{"SSL_CERT_FILE=" + caAbs},
+		"space", "list", "--instance", mockURL, "-o", "json")
+	if !strings.Contains(out, `"key":"TLS"`) {
+		t.Errorf("space list over self-signed TLS with SSL_CERT_FILE should succeed: %s", out)
+	}
+
+	// 2. Without the CA, verification must fail — proving #1 succeeded because
+	//    of the CA, not by accident.
+	run(true, []string{"SSL_CERT_FILE="},
+		"space", "list", "--instance", mockURL)
+
+	// 3. --insecure bypasses verification and succeeds again.
+	insecureOut := run(false, []string{"SSL_CERT_FILE="},
+		"space", "list", "--instance", mockURL, "--insecure", "-o", "json")
+	if !strings.Contains(insecureOut, `"key":"TLS"`) {
+		t.Errorf("space list with --insecure should succeed over self-signed TLS: %s", insecureOut)
+	}
+}

@@ -72,10 +72,30 @@ make down
 | `TestE2E_SpaceList_and_Get` | `space list` + `space get`. |
 | `TestE2E_Page_full_lifecycle` | create → get → update (version increments) → children → delete. |
 | `TestE2E_Page_not_found` | 404 → translated error, non-zero exit. |
-| `TestE2E_SelfSigned_TLS` | `SSL_CERT_FILE` trusts the self-signed CA (no flag); `--insecure` bypasses verification. |
+| `TestE2E_SelfSigned_TLS` | `SSL_CERT_FILE` trusts the self-signed CA (no flag); `--insecure` bypasses verification. Uses the nginx proxy in front of the real Confluence. |
+| `TestE2E_SelfSigned_TLS_Mock` | Same TLS guarantees, but against a **static** self-signed server — **no Confluence, no license, fully automatic** (see below). |
 
 If the `CFL_E2E_*` variables are not set, the suite **skips** rather than fails,
 so `go test -tags=e2e ./...` is safe on a machine without the stack.
+
+## Automated self-signed TLS check (no license)
+
+`TestE2E_SelfSigned_TLS_Mock` exercises the exact same `SSL_CERT_FILE` /
+`--insecure` behavior as `TestE2E_SelfSigned_TLS`, but against a standalone nginx
+that returns **static** Confluence-shaped JSON. It needs no Confluence setup and
+no PAT, so it runs end to end automatically:
+
+```sh
+cd test/e2e
+make tls-up      # generates the cert + starts the mock on https://localhost:8444
+make tls-test    # runs only TestE2E_SelfSigned_TLS_Mock (no env setup needed)
+make tls-down
+```
+
+This is the recommended way to validate the self-signed TLS path in CI or
+locally without provisioning a licensed Confluence. The full
+`TestE2E_SelfSigned_TLS` remains for end-to-end confidence against the real
+server.
 
 ## Notes
 

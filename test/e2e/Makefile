@@ -1,6 +1,7 @@
-.PHONY: up down certs test logs status clean
+.PHONY: up down certs test logs status clean tls-up tls-down tls-test
 
 COMPOSE := docker compose
+TLS_COMPOSE := docker compose -f docker-compose.tls.yml
 CERT_DIR := certs
 CN := wiki.local
 
@@ -42,3 +43,20 @@ clean:
 # CFL_E2E_* environment variables (see README.md).
 test:
 	cd ../.. && go test ./test/e2e/... -tags=e2e -v -count=1
+
+# --- Standalone self-signed TLS mock (no Confluence, no license) ---
+
+# Start the mock TLS server that serves static Confluence-shaped JSON over a
+# self-signed cert on :8444.
+tls-up: certs
+	$(TLS_COMPOSE) up -d
+	@echo "Mock TLS server on https://localhost:8444 (self-signed)."
+
+# Run ONLY the automated self-signed TLS test against the mock. No PAT needed.
+tls-test:
+	CFL_E2E_TLS_MOCK_URL=https://localhost:8444 \
+	CFL_E2E_CA_FILE=$(CURDIR)/$(CERT_DIR)/$(CN).crt \
+	go test ../../test/e2e/... -tags=e2e -run TestE2E_SelfSigned_TLS_Mock -v -count=1
+
+tls-down:
+	$(TLS_COMPOSE) down
