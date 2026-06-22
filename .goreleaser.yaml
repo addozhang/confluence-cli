@@ -1,0 +1,73 @@
+version: 2
+
+project_name: cfl
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cfl
+    main: ./cmd/cfl
+    binary: cfl
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/addozhang/cfl/internal/cli.version={{.Version}}
+      - -X github.com/addozhang/cfl/internal/cli.commit={{.ShortCommit}}
+      - -X github.com/addozhang/cfl/internal/cli.date={{.Date}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: cfl
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - docs/schema.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+
+brews:
+  - name: cfl
+    repository:
+      owner: addozhang
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/addozhang/confluence-cli"
+    description: "URL-native Confluence Server/DC CLI"
+    license: "MIT"
+    install: |
+      bin.install "cfl"
+    test: |
+      system "#{bin}/cfl", "version"
+
+release:
+  github:
+    owner: addozhang
+    name: confluence-cli
+  prerelease: auto

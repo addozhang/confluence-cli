@@ -1,0 +1,24 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  Project: cfl — a URL-native Confluence CLI written in Go.
+  Tech stack: Go 1.22+, spf13/cobra, sigs.k8s.io/yaml, BurntSushi/toml, net/http (stdlib only).
+  Module path: github.com/addozhang/cfl; binary name: cfl.
+  Target platform: Confluence Server / Data Center ONLY (not Cloud).
+  Auth: Personal Access Token (PAT) sent as `Authorization: Bearer <token>`; no username stored.
+  Core bets: URL as identity, stable self-owned output schema, kubectl-style output (-o yaml|json|raw, YAML default, schemaVersion: "1" first line).
+  Content format: Confluence storage format (XHTML); reads expand body.storage,version; updates are version-aware (PUT requires version.number = current+1).
+  Architecture: cmd/cfl is wiring only; all logic under internal/ (cli, confluence, confluenceurl, auth, schema, output, errors).
+  The project constitution is SPEC.md (toolchain/layout/style/boundaries). OpenSpec specs govern product behavior.
+  Language policy: ALL artifacts MUST be in English (code, comments, docs, commit messages, spec files, PR descriptions).
+
+# Per-artifact rules (optional)
+rules:
+  proposal:
+    - Keep the "Why" focused on the user problem, not implementation.
+    - Always include a "Not Doing" / non-goals section.
+  specs:
+    - Use SHALL/MUST/WHEN/THEN requirement-and-scenario format.
+    - Every Requirement has at least one Scenario.

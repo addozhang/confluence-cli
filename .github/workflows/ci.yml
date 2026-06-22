@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          check-latest: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -s -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.1.6
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          check-latest: true
+      - name: Build
+        run: go build ./...
+      - name: Test (race + coverage)
+        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+      - name: Enforce >= 70% coverage on core packages
+        run: |
+          set -euo pipefail
+          core_packages=(
+            github.com/addozhang/cfl/internal/confluenceurl
+            github.com/addozhang/cfl/internal/schema
+            github.com/addozhang/cfl/internal/auth
+            github.com/addozhang/cfl/internal/output
+            github.com/addozhang/cfl/internal/errors
+          )
+          fail=0
+          for pkg in "${core_packages[@]}"; do
+            pct=$(go test "$pkg" -cover | sed -n 's/.*coverage: \([0-9.]*\)% of statements.*/\1/p')
+            if [ -z "$pct" ]; then
+              echo "FAIL: no coverage reported for $pkg"
+              fail=1
+              continue
+            fi
+            awk -v p="$pct" -v pkg="$pkg" 'BEGIN { if (p+0 < 70) { printf "FAIL: %s coverage %.1f%% < 70%%\n", pkg, p; exit 1 } else { printf "OK:   %s coverage %.1f%%\n", pkg, p } }' || fail=1
+          done
+          exit $fail

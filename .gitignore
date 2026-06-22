@@ -1,0 +1,17 @@
+# Build artifacts
+/bin/
+/dist/
+
+# Test artifacts
+*.out
+coverage.txt
+
+# Editor/OS
+.DS_Store
+
+# Agent/tooling scaffolding (not part of the project)
+/.agents/
+/.opencode/
+
+# Local credentials must never be committed
+credentials

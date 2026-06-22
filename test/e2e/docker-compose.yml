@@ -1,0 +1,68 @@
+# End-to-end environment for cfl.
+#
+# Two-tier setup:
+#   - confluence + postgres : a real Confluence Server/DC instance (HTTP :8090)
+#   - nginx                 : a self-signed TLS reverse proxy (HTTPS :8443)
+#
+# The nginx tier exists specifically to exercise cfl's SSL_CERT_FILE and
+# --insecure handling against a self-signed certificate, while the confluence
+# tier exercises every page/space/auth/version command against a real server.
+#
+# Usage:
+#   make -C test/e2e up        # start the stack (first boot ~3-5 min)
+#   make -C test/e2e certs     # (re)generate the self-signed cert
+#   ... complete Confluence setup + create a PAT in the web UI ...
+#   make -C test/e2e test      # run `go test -tags=e2e`
+#   make -C test/e2e down      # tear down
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: confluence
+      POSTGRES_USER: confluence
+      POSTGRES_PASSWORD: confluence
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U confluence"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  confluence:
+    image: atlassian/confluence:8.5
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ATL_DB_TYPE: postgresql
+      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/confluence
+      ATL_JDBC_USER: confluence
+      ATL_JDBC_PASSWORD: confluence
+      ATL_TOMCAT_CONTEXTPATH: /
+      JVM_MINIMUM_MEMORY: 1g
+      JVM_MAXIMUM_MEMORY: 2g
+    ports:
+      - "8090:8090"
+    volumes:
+      - confluencedata:/var/atlassian/application-data/confluence
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8090/status | grep -q RUNNING || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - confluence
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./nginx/confluence-tls.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+
+volumes:
+  pgdata:
+  confluencedata:
