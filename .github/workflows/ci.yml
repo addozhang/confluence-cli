@@ -17,7 +17,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          check-latest: true
       - name: gofmt
         run: |
           unformatted=$(gofmt -s -l .)
@@ -27,9 +26,9 @@ jobs:
             exit 1
           fi
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1.6
+          version: v2.5.0
 
   test:
     runs-on: ubuntu-latest
@@ -38,7 +37,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          check-latest: true
       - name: Build
         run: go build ./...
       - name: Test (race + coverage)
