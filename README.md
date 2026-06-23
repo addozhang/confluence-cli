@@ -218,6 +218,26 @@ ver=$(cfl page get "$URL" -o json | jq -r .schemaVersion)
 [ "$ver" = "1" ] || { echo "unexpected cfl schemaVersion: $ver" >&2; exit 1; }
 ```
 
+## AI agent skill
+
+`cfl` ships a companion skill for AI coding agents at
+[`skills/cfl-confluence-cli/`](./skills/cfl-confluence-cli/). The skill is a
+concise operating guide for agents that need to read Confluence pages, create or
+update content, search with CQL, or manage credentials — all from the terminal,
+driven by the Confluence URL the user pastes.
+
+Use it when an agent has terminal access and needs to work with Confluence
+through `cfl`. The skill emphasizes:
+
+- using Confluence URLs as the unit of identity (Server/DC only — not Cloud);
+- preferring `-o json` for machine-readable inspection;
+- the instance-selection rules for bare page IDs (`-i <url|alias>` or `<alias>:<id>`);
+- version-safe updates and retrying on a version conflict;
+- treating page bodies as storage-format XHTML (no Markdown conversion);
+- `--cql` taking precedence in search;
+- confirming before creating, overwriting, or deleting content;
+- never printing or pasting Personal Access Tokens.
+
 ## Exit codes
 
 | Code | Meaning |

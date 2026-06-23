@@ -1,0 +1,77 @@
+{
+  "skill_name": "cfl-confluence-cli",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "You are in an environment where cfl is installed but Confluence is not reachable during this eval. A user pastes https://wiki.example.com/spaces/ENG/pages/12345/Runbook and asks you to read the page. Describe the exact cfl command you would run and what fields you would report.",
+      "expected_output": "The agent should run cfl page get <url> -o json, note the ID in the URL is authoritative (no title lookup), and report id, title, spaceKey, version, and body from the JSON.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Describe the safe cfl workflow to update the body of the page at https://wiki.example.com/pages/viewpage.action?pageId=12345 from a local file new.xhtml, including how cfl handles versioning and what to do on a version conflict.",
+      "expected_output": "The agent should run cfl page update <url> -b @./new.xhtml -o json, explain cfl reads the current version and submits current+1 itself, and on a version conflict re-run cfl page get then retry — never guessing a version number.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "A user asks you to find pages about 'runbook' in the ENG space on their Confluence at https://wiki.example.com. What cfl command should the agent run, and how is the search term handled?",
+      "expected_output": "The agent should run cfl search \"runbook\" -s ENG -i https://wiki.example.com -o json, noting the term is CQL-escaped (never injected) and the default type is page.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "A user wants a precise Confluence search: pages in space ENG with a title matching 'deploy' created in the last 7 days. They mention they know CQL. What cfl command fits, and how does --cql interact with -s/--type?",
+      "expected_output": "The agent should use cfl search --cql 'space = ENG AND title ~ \"deploy\" AND created > now(\"-7d\")' -o json and explain --cql has the highest precedence: when given it is the complete query and -s/--type/the term are ignored.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "The user gives only the bare page ID 12345 and asks to read it. Two Confluence instances are configured. What should the agent do with cfl?",
+      "expected_output": "The agent should recognize a bare ID is ambiguous with multiple instances and pass -i <url|alias> (or use the <alias>:<id> form, e.g. prod:12345), or ask the user for the full page URL.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "A user pastes a full page URL https://wiki.example.com/spaces/ENG/pages/12345 but also says 'use the staging instance'. They have a 'staging' alias configured. What should the agent do?",
+      "expected_output": "The agent should explain that a full URL carries its own host, so --instance is ignored; the request goes to wiki.example.com from the URL. If they really want staging, they must use a staging URL or a bare id with -i staging.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "cfl reports 'No credential configured for https://wiki.example.com' when reading a page. What should the agent do without exposing secrets?",
+      "expected_output": "The agent should run the suggested cfl auth add https://wiki.example.com (interactively, hidden PAT prompt), check cfl auth list -o json for configured instances, and never ask the user to paste the token into chat or print credential file contents.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "cfl fails with a TLS certificate error against an internal Confluence at https://wiki.internal/spaces/ENG/pages/1. What is the safe troubleshooting path?",
+      "expected_output": "The agent should prefer setting SSL_CERT_FILE to the internal CA PEM bundle (honored with no flag), mention --insecure only as a last resort that disables verification, and not normalize insecure mode as the default fix.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "The user says 'delete the page at https://wiki.example.com/pages/viewpage.action?pageId=999' in a non-interactive automation context. What should the agent do with cfl?",
+      "expected_output": "The agent should note deletion needs explicit intent: cfl page delete <url> -y in non-interactive use, and should confirm once with the user before deleting unless they already explicitly requested that exact page deletion.",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "The user asks you to create a Confluence page whose body is written in Markdown. What should the agent clarify before running cfl page create?",
+      "expected_output": "The agent should explain cfl passes bodies through as Confluence storage format (XHTML) unchanged and does not convert Markdown; the body must be valid storage-format XHTML, supplied via -b @file, -b - (stdin), or a literal string.",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "A user asks 'use cfl to read a page on our Confluence Cloud site at https://acme.atlassian.net/wiki/spaces/ENG/pages/123'. What should the agent answer?",
+      "expected_output": "The agent should state that cfl supports Confluence Server/Data Center only, not Confluence Cloud (different auth and API), and should not attempt the command against the atlassian.net Cloud URL.",
+      "files": []
+    },
+    {
+      "id": 12,
+      "prompt": "A user says 'check our Confluence' but gives no URL and no page/space. What should the agent do with cfl?",
+      "expected_output": "The agent should not guess a host or page ID; it should ask for the Confluence URL (page, space, or instance) needed to identify the target, and optionally note cfl needs a URL or a configured single instance.",
+      "files": []
+    }
+  ]
+}

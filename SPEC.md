@@ -129,6 +129,9 @@ Any change that introduces a new top-level make target must justify itself in th
 │   ├── spikes/                      ← early exploration notes (storage format, URL samples)
 │   └── adr/                         ← architecture decision records (when design.md is insufficient)
 │
+├── skills/                          ← AI agent skills (operating guides for using cfl)
+│   └── cfl-confluence-cli/          ← SKILL.md + evals/
+│
 └── openspec/                        ← change management (maintained by the OpenSpec tool)
     ├── changes/                     ← in-flight changes
     └── specs/                       ← archived capability contracts (authoritative product behavior)
@@ -272,7 +275,7 @@ func newPageGetCmd(deps *Deps) *cobra.Command {
 - Modify any field tagged `stable` in `docs/schema.md` (any rename, type change, or removal).
 - Change the `schemaVersion` constant.
 - Change `Makefile` / `.golangci.yml` / `.goreleaser.yaml` / GitHub Actions workflows.
-- Add a new top-level directory (anything outside `/cmd`, `/internal`, `/test`, `/docs`, `/openspec`).
+- Add a new top-level directory (anything outside `/cmd`, `/internal`, `/test`, `/docs`, `/skills`, `/openspec`).
 - Bypass the OpenSpec workflow to edit anything under archived `openspec/specs/`.
 - Raise the Go minimum version.
 - Introduce `unsafe`, `cgo`, build constraints, or assembly.
