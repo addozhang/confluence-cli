@@ -95,7 +95,7 @@
 ## 13. Global flags & CLI wiring
 
 - [x] 13.1 Register global persistent flags on the root command: `-o/--output {yaml|json|raw}` (default yaml), `--timeout` (default `30s`), `--insecure`, `--debug`; build the `*Deps` (client, auth store, output format) and inject into command constructors (SPEC.md §Dependency injection).
-- [ ] 13.2 Bind `--timeout` to `cmd.Context()` so every IO call is bounded; wire `--debug` to a `slog` handler writing to stderr. _(Partial: `--timeout` is bound via `http.Client.Timeout` (functionally bounds every request) and `--debug` logs the redacted exchange via the transport layer to stderr. Switching to `cmd.Context()` deadline + `slog` is a refinement; current behavior satisfies the tls-and-transport spec scenarios.)_
+- [x] 13.2 Bind `--timeout` to `cmd.Context()` so every IO call is bounded; wire `--debug` to a `slog` handler writing to stderr. _(Implemented: the root command's PersistentPreRunE wraps `cmd.Context()` in a `context.WithTimeout` deadline (cancelled in PersistentPostRun); the http.Client no longer sets its own Timeout. `--debug` now logs via a `log/slog` text handler with the `Authorization` header redacted. Context deadlines/network errors are classified into the timeout/network `CFLError`. Covered by `internal/cli/timeout_test.go` and the slog assertion in `internal/confluence/transport_test.go`.)_
 - [x] 13.3 Verify no command prints to stdout/stderr except through `internal/output` and `internal/errors` (SPEC.md §Never do).
 
 ## 14. External contract & docs

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,6 +70,9 @@ func (d *Deps) credentialsPath() (string, error) {
 
 // ClientForRef builds a Confluence client targeting the instance identified by
 // ref, using the given store for Bearer auth and the global TLS/debug settings.
+// The per-request timeout is applied through the command context (see the root
+// command's PersistentPreRunE), not on the http.Client, so cancellation and
+// deadlines propagate the idiomatic way.
 func (d *Deps) ClientForRef(ref confluenceurl.Ref, store *auth.Store) (*confluence.Client, error) {
 	stderr := d.errWriter()
 	rt, err := confluence.NewTransport(confluence.TransportConfig{
@@ -82,7 +86,7 @@ func (d *Deps) ClientForRef(ref confluenceurl.Ref, store *auth.Store) (*confluen
 	if err != nil {
 		return nil, err
 	}
-	httpClient := &http.Client{Transport: rt, Timeout: d.Timeout}
+	httpClient := &http.Client{Transport: rt}
 	return confluence.NewClient(httpClient, ref.BaseURL, ref.ContextPath), nil
 }
 
@@ -106,6 +110,7 @@ type globalFlags struct {
 func NewRootCmd() *cobra.Command {
 	flags := &globalFlags{}
 	deps := &Deps{}
+	var cancelTimeout context.CancelFunc
 
 	root := &cobra.Command{
 		Use:           "cfl",
@@ -127,7 +132,21 @@ func NewRootCmd() *cobra.Command {
 			if deps.Stderr == nil {
 				deps.Stderr = cmd.ErrOrStderr()
 			}
+			// Bind the per-request timeout to the command context as a deadline,
+			// so every IO call started from cmd.Context() is bounded and
+			// cancellation propagates idiomatically. The cancel runs in
+			// PersistentPostRun.
+			if flags.timeout > 0 {
+				ctx, cancel := context.WithTimeout(cmd.Context(), flags.timeout)
+				cancelTimeout = cancel
+				cmd.SetContext(ctx)
+			}
 			return nil
+		},
+		PersistentPostRun: func(_ *cobra.Command, _ []string) {
+			if cancelTimeout != nil {
+				cancelTimeout()
+			}
 		},
 	}
 

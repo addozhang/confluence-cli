@@ -1,7 +1,10 @@
 package errors
 
 import (
+	"context"
 	stderrors "errors"
+	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -135,3 +138,50 @@ func Test_WrapURLParse(t *testing.T) {
 		t.Errorf("Message %q should include the offending argument", got.Message)
 	}
 }
+
+func Test_TranslateConfluence_context_deadline_is_timeout(t *testing.T) {
+	// A wrapped context deadline (as the client surfaces it) must classify as a
+	// timeout, not a malformed response.
+	wrapped := fmt.Errorf("GET https://wiki.example.com/rest/api/space: %w", context.DeadlineExceeded)
+	got := asCFL(t, TranslateConfluence("https://wiki.example.com", ResourceSpace, wrapped))
+
+	if got.Code != CodeTimeout {
+		t.Errorf("Code = %v, want %v", got.Code, CodeTimeout)
+	}
+	if !strings.Contains(got.Suggestion, "--timeout") {
+		t.Errorf("Suggestion %q should mention --timeout", got.Suggestion)
+	}
+}
+
+func Test_TranslateConfluence_net_timeout_is_timeout(t *testing.T) {
+	got := asCFL(t, TranslateConfluence("https://wiki.example.com", ResourcePage, timeoutNetErr{}))
+	if got.Code != CodeTimeout {
+		t.Errorf("Code = %v, want %v", got.Code, CodeTimeout)
+	}
+}
+
+func Test_TranslateConfluence_dns_error_is_network(t *testing.T) {
+	dns := &net.DNSError{Err: "no such host", Name: "wiki.absent.example"}
+	wrapped := fmt.Errorf("GET https://wiki.absent.example/rest/api/space: %w", dns)
+	got := asCFL(t, TranslateConfluence("https://wiki.absent.example", ResourceSpace, wrapped))
+
+	if got.Code != CodeNetwork {
+		t.Errorf("Code = %v, want %v", got.Code, CodeNetwork)
+	}
+}
+
+func Test_TranslateConfluence_opnerror_is_network(t *testing.T) {
+	op := &net.OpError{Op: "dial", Net: "tcp", Err: stderrors.New("connection refused")}
+	got := asCFL(t, TranslateConfluence("https://wiki.example.com", ResourcePage, op))
+	if got.Code != CodeNetwork {
+		t.Errorf("Code = %v, want %v", got.Code, CodeNetwork)
+	}
+}
+
+// timeoutNetErr is a net.Error whose Timeout() reports true, for classifying
+// transport timeouts that are not context deadlines.
+type timeoutNetErr struct{}
+
+func (timeoutNetErr) Error() string   { return "i/o timeout" }
+func (timeoutNetErr) Timeout() bool   { return true }
+func (timeoutNetErr) Temporary() bool { return false }

@@ -1,8 +1,10 @@
 package errors
 
 import (
+	"context"
 	stderrors "errors"
 	"fmt"
+	"net"
 	"time"
 )
 
@@ -45,7 +47,20 @@ func TranslateConfluence(host string, res Resource, err error) error {
 
 	var httpErr *HTTPStatusError
 	if !stderrors.As(err, &httpErr) {
-		// Not an HTTP status failure; treat as a malformed/unexpected response.
+		// Not an HTTP status failure: classify transport-level failures
+		// (timeout, then other network errors) before falling back to a
+		// malformed/unexpected-response message.
+		if isTimeout(err) {
+			return &CFLError{
+				Code:       CodeTimeout,
+				Message:    fmt.Sprintf("Timed out contacting %s.", host),
+				Suggestion: "Increase the limit with `--timeout <duration>` or check VPN connectivity.",
+				Cause:      err,
+			}
+		}
+		if isNetworkError(err) {
+			return TranslateNetwork(host, err)
+		}
 		return TranslateMalformed(host, err)
 	}
 
@@ -145,4 +160,35 @@ func WrapURLParse(arg string, cause error) error {
 		Suggestion: "Pass a Confluence page/space URL or a numeric page ID.",
 		Cause:      cause,
 	}
+}
+
+// isTimeout reports whether err is a deadline/timeout: a context deadline, or a
+// net.Error whose Timeout() is true.
+func isTimeout(err error) bool {
+	if stderrors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if stderrors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return false
+}
+
+// isNetworkError reports whether err is a connection-level failure (DNS,
+// connection refused, unreachable host) that is not a timeout.
+func isNetworkError(err error) bool {
+	if stderrors.Is(err, context.Canceled) {
+		return true
+	}
+	var netErr net.Error
+	if stderrors.As(err, &netErr) {
+		return true
+	}
+	var dnsErr *net.DNSError
+	if stderrors.As(err, &dnsErr) {
+		return true
+	}
+	var opErr *net.OpError
+	return stderrors.As(err, &opErr)
 }

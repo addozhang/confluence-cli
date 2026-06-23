@@ -72,7 +72,7 @@ func NewTransport(cfg TransportConfig, store *auth.Store) (http.RoundTripper, er
 		if debugLog == nil {
 			debugLog = os.Stderr
 		}
-		rt = &debugTransport{base: rt, out: debugLog}
+		rt = newDebugTransport(rt, debugLog)
 	}
 
 	rt = &bearerTransport{base: rt, store: store}

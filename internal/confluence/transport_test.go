@@ -110,6 +110,11 @@ func Test_DebugTransport_redacts_bearer_token(t *testing.T) {
 	if !strings.Contains(logged, "GET") || !strings.Contains(logged, "/rest/api/content/1") {
 		t.Errorf("debug log should include method and URL, got: %q", logged)
 	}
+	// The debug log is emitted through log/slog: a structured handler stamps
+	// each record with a level (e.g. "level=DEBUG" / "level=INFO").
+	if !strings.Contains(logged, "level=") {
+		t.Errorf("debug log should be emitted via slog (expected a level= attribute), got: %q", logged)
+	}
 }
 
 func Test_InsecureTransport_writes_warning_to_stderr(t *testing.T) {
