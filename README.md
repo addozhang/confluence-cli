@@ -8,6 +8,30 @@ lets you edit it with version-safe updates.
 > **Server / Data Center only.** Confluence Cloud uses a different auth model and
 > API surface and is out of scope.
 
+**What `cfl` is**
+
+- A daily-driver CLI for developers and writers who work with Confluence from
+  the terminal: read a page, edit it, create one, search, all driven by the URL
+  you'd paste into a browser.
+- **Agent-friendly by design.** The output is a stable, self-owned schema
+  (`schemaVersion: "1"`, `-o json` for machines), exit codes are simple
+  (`0` / `>=10`), and errors are one-sentence messages with a suggested next
+  step — so an AI coding agent can drive `cfl` reliably. It ships a companion
+  [skill](./skills/cfl-confluence-cli/) for exactly that.
+- **A thin transport, not a converter.** Page bodies move verbatim as Confluence
+  **storage format** (XHTML) in both directions. `cfl` deliberately does no
+  Markdown/wiki conversion: the caller — a human who knows storage format, or an
+  LLM that understands both — owns the format. This keeps `cfl` small and lets a
+  capable model generate or read the XHTML far better than a fixed library could.
+
+**What `cfl` is not**
+
+- Not a Confluence **Cloud** tool (different auth + v2 API).
+- Not a Markdown/wiki editor — bodies are storage-format XHTML, passed through
+  unchanged. Raw Markdown sent as a body is stored literally, not rendered.
+- Not a Confluence administration tool — no attachment, comment, label, or
+  user-management commands; page + space read/write (plus search) is the surface.
+
 ## Features
 
 - **URL as identity** — every page/space command accepts a Confluence URL

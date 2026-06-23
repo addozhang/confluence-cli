@@ -14,7 +14,7 @@ Use `cfl` to read and operate Confluence **Server / Data Center** pages and spac
 - **Confluence URLs are the primary identity.** Use the exact URL the user would paste into a browser. The host (plus optional reverse-proxy context path) selects the stored credential.
 - **Server / Data Center only.** Confluence **Cloud** is out of scope (different auth + API). Do not use `cfl` against `*.atlassian.net`.
 - **Output is stable and self-owned.** Prefer `-o json` for agent parsing, YAML (default) for humans, and `-o raw` only when you need a field the schema does not expose. Every structured response begins with `schemaVersion: "1"`.
-- **Bodies are Confluence storage format (XHTML), passed through unchanged.** `cfl` does not convert Markdown or wiki markup. When creating/updating, supply valid storage-format XHTML.
+- **Bodies are Confluence storage format (XHTML), not Markdown.** `cfl` transports the body verbatim in both directions and never converts. **You (the model) are the converter** — read storage XHTML yourself, and generate valid storage XHTML when creating/updating. See *Body Format* below.
 - **Version-safe updates.** `cfl page update` reads the current version and submits `current + 1`; a concurrent edit surfaces as a clear version-conflict error.
 - It can read pages, create/update/delete pages, list a page's children, list/read spaces, search content (CQL), and manage per-instance credentials.
 
@@ -79,18 +79,72 @@ Context paths (reverse-proxy mounts like `/confluence`) before the first
 
 Prefer pasting the user's full URL whenever available — it removes all ambiguity.
 
+## Body Format: Confluence Storage XHTML
+
+Page bodies are **Confluence storage format** — an XHTML dialect, **not Markdown
+and not wiki markup**. `cfl` transports it verbatim in both directions and never
+converts. **You (the model) are the converter.** This is deliberate: you
+understand both Markdown and Confluence storage XHTML far better than any fixed
+conversion library, so `cfl` stays a thin transport and leaves the format work
+to you.
+
+### Reading (`cfl page get`)
+
+The `body` field you get back is storage XHTML. Parse and understand it yourself
+— do not expect Markdown. It uses standard HTML tags plus Confluence's macro
+namespace (`ac:` / `ri:`). When summarizing or answering questions about a page,
+read the XHTML directly. If you want to show the user a Markdown rendering,
+convert it yourself; `cfl` will not.
+
+### Writing (`cfl page create` / `cfl page update`)
+
+`cfl` sends `-b/--body` straight to Confluence as the storage value. So **you
+must produce valid storage XHTML** from whatever the user gives you (a request in
+prose, Markdown, or a rough draft). Do not pass raw Markdown — Confluence stores
+it literally, so `## Heading` and `**bold**` would appear as those exact
+characters on the page, not as a heading or bold text.
+
+Common Markdown → storage-XHTML conversions to apply yourself:
+
+```text
+# H1 / ## H2                 ->  <h1>…</h1> / <h2>…</h2>
+**bold**  /  *italic*        ->  <strong>…</strong>  /  <em>…</em>
+`inline code`                ->  <code>…</code>
+- item / 1. item             ->  <ul><li>…</li></ul>  /  <ol><li>…</li></ol>
+[text](https://url)          ->  <a href="https://url">text</a>
+> quote                      ->  <blockquote><p>…</p></blockquote>
+paragraph                    ->  <p>…</p>
+
+fenced code block            ->  <ac:structured-macro ac:name="code">
+  ```python                       <ac:parameter ac:name="language">python</ac:parameter>
+  print("hi")                     <ac:plain-text-body><![CDATA[print("hi")]]></ac:plain-text-body>
+  ```                             </ac:structured-macro>
+
+info / note / warning panel  ->  <ac:structured-macro ac:name="info">
+                                    <ac:rich-text-body><p>…</p></ac:rich-text-body>
+                                  </ac:structured-macro>
+```
+
+Notes when generating storage XHTML:
+
+- It must be **well-formed XML**: close every tag, escape `&`, `<`, `>` in text as `&amp;` `&lt;` `&gt;`, and self-close voids (`<br/>`, `<hr/>`).
+- Put literal code inside `<![CDATA[ … ]]>` (in the code macro's `plain-text-body`) so its `<`/`&` are not parsed as XHTML.
+- If a body is malformed, Confluence rejects the request — surface that as the translated error and fix the XHTML, do not retry the same body.
+- When in doubt about a Confluence-specific construct (status lozenge, expand, table of contents, page include), keep it simple with standard tags, or read an existing page with `cfl page get -o raw` to copy the exact macro shape Confluence uses.
+
 ## `--body` Input
 
-`-b/--body` accepts three forms:
+`-b/--body` accepts three forms (all carry **storage XHTML**, per the section
+above — never raw Markdown):
 
 ```sh
-cfl page create -s ENG -t "Notes" -b @./notes.xhtml   # @path : read from file
-cat notes.xhtml | cfl page create -s ENG -t N -b -     # -    : read from stdin
+cfl page create -s ENG -t "Notes" -b @./notes.xhtml    # @path : read from a file
+cat body.xhtml | cfl page create -s ENG -t N -b -      # -    : read from stdin
 cfl page update <url> -b '<p>literal storage XHTML</p>' # literal string verbatim
 ```
 
-The body must be valid Confluence **storage format** (XHTML). Do not pass
-Markdown — it will be stored literally or rejected by the server.
+Generate the XHTML yourself (see *Body Format* above) and pass it via the literal
+form, or write it to a file and use `@path`.
 
 ## Common Workflows
 
@@ -100,9 +154,11 @@ Markdown — it will be stored literally or rejected by the server.
 cfl page get https://wiki.example.com/spaces/ENG/pages/12345/Runbook -o json
 ```
 
-Use the resolved `id`, `version`, `spaceKey`, `body` (storage XHTML), and
-`ancestors` from the JSON. For a display URL (`/display/KEY/Title`) `cfl` does a
-title lookup first; a non-unique or missing title errors clearly.
+Use the resolved `id`, `version`, `spaceKey`, `body`, and `ancestors` from the
+JSON. The `body` is Confluence storage XHTML (not Markdown) — parse it yourself
+to summarize or answer questions (see *Body Format*). For a display URL
+(`/display/KEY/Title`) `cfl` does a title lookup first; a non-unique or missing
+title errors clearly.
 
 ### Update a Page Safely
 
