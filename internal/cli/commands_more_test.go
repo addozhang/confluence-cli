@@ -217,3 +217,41 @@ func Test_cmd_page_create_body_from_file(t *testing.T) {
 		t.Fatalf("page create from file error: %v", err)
 	}
 }
+
+func Test_cmd_page_get_spaces_pages_url(t *testing.T) {
+	var sawContentByID bool
+	var sawLookup bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/api/content":
+			// A title lookup would mean the ID was not used directly — wrong.
+			sawLookup = true
+			_, _ = w.Write([]byte(`{"results":[]}`))
+		case strings.HasPrefix(r.URL.Path, "/rest/api/content/98765"):
+			sawContentByID = true
+			_, _ = w.Write([]byte(`{"id":"98765","title":"Runbook","space":{"key":"ENG"},"version":{"number":4},"ancestors":[],"body":{"storage":{"value":"<p/>","representation":"storage"}}}`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	creds := writeCreds(t, dir, srv.URL)
+	// Modern URL shape: /spaces/KEY/pages/ID/Title. The ID is authoritative.
+	pageURL := srv.URL + "/spaces/ENG/pages/98765/Runbook"
+
+	out, _, err := runCmd(t, creds, "", "page", "get", pageURL, "-o", "json")
+	if err != nil {
+		t.Fatalf("page get spaces/pages url error: %v", err)
+	}
+	if sawLookup {
+		t.Errorf("spaces/pages URL must read by ID, not via a title lookup")
+	}
+	if !sawContentByID {
+		t.Errorf("expected a content-by-id read for page 98765")
+	}
+	if !strings.Contains(out, `"id":"98765"`) {
+		t.Errorf("output should carry id 98765, got: %s", out)
+	}
+}

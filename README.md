@@ -11,7 +11,8 @@ lets you edit it with version-safe updates.
 ## Features
 
 - **URL as identity** — every page/space command accepts a Confluence URL
-  (display URL, `pageId` URL, REST URL) or a bare numeric page ID.
+  (display URL, `pageId` URL, `/spaces/KEY/pages/ID/Title` URL, REST URL) or a
+  bare numeric page ID (optionally `alias:id`).
 - **PAT Bearer auth** — credentials are Personal Access Tokens sent as
   `Authorization: Bearer <token>`; no username is stored or transmitted.
 - **Stable self-owned schema** — `-o yaml|json|raw`, YAML by default, every
@@ -68,6 +69,7 @@ cfl auth whoami https://wiki.example.com
 
 # 3. Read a page (any Confluence URL shape, or a bare page ID).
 cfl page get https://wiki.example.com/pages/viewpage.action?pageId=12345
+cfl page get https://wiki.example.com/spaces/ENG/pages/12345/Runbook
 cfl page get https://wiki.example.com/display/ENG/Runbook
 cfl page get 12345          # works when exactly one instance is configured
 ```
@@ -77,10 +79,19 @@ cfl page get 12345          # works when exactly one instance is configured
 ### auth
 
 ```sh
-cfl auth add <url>          # store a PAT (hidden prompt; overwrite is confirmed)
-cfl auth list               # list configured instance keys (never tokens)
-cfl auth remove <url>       # remove a stored credential (idempotent)
-cfl auth whoami <url>       # verify a stored token against its instance
+cfl auth add <url> [--alias <name>]   # store a PAT (hidden prompt); optional short alias
+cfl auth list                         # list configured instances + aliases (never tokens)
+cfl auth remove <url>                 # remove a stored credential (idempotent)
+cfl auth whoami <url>                 # verify a stored token against its instance
+```
+
+An **alias** is a short name for an instance. Once set, use it anywhere an
+instance is named:
+
+```sh
+cfl auth add https://wiki.example.com --alias prod
+cfl space list --instance prod        # alias instead of the full URL
+cfl page get prod:12345               # <alias>:<id> picks the instance for a bare page ID
 ```
 
 ### page
@@ -104,6 +115,29 @@ Markdown/wiki conversion.
 
 `cfl page delete` requires explicit intent: pass `--yes`, or confirm the
 interactive prompt. In a non-interactive session it refuses without `--yes`.
+
+### search
+
+```sh
+cfl search <text> [--space KEY] [--type page|blogpost] [--limit N] [--start N] [--instance URL|alias]
+cfl search --cql '<raw CQL>' [--limit N] [--start N] [--instance URL|alias]
+```
+
+The friendly form compiles your inputs into Confluence CQL: the search term is
+matched as free text (always escaped, never injected), `--space`/`--type` add
+constraints, and `--type` defaults to `page`.
+
+`--cql` has the **highest precedence**: when supplied it is used as the complete
+query and the term/`--space`/`--type` are ignored (a note is printed to stderr).
+CQL is not validated client-side; a malformed query surfaces the server's error.
+
+```sh
+cfl search "release notes" --space ENG --instance prod
+cfl search --cql 'space = ENG AND title ~ "runbook" AND created > now("-7d")' --instance prod
+```
+
+`search` returns a single bounded page; `--limit`/`--start` map onto the REST
+pagination parameters.
 
 ### space
 

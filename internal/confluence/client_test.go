@@ -330,3 +330,38 @@ func Test_context_path_is_prefixed(t *testing.T) {
 		t.Errorf("path = %s, want /confluence/rest/api/content/1", rs.path)
 	}
 }
+
+func Test_Search_endpoint_and_params(t *testing.T) {
+	rs := newRecordingServer(t, http.StatusOK, `{"results":[],"start":0,"limit":25,"size":0}`)
+	c := newTestClient(t, rs.srv.URL)
+
+	_, err := c.Search(ctx(), `space = ENG AND text ~ "runbook"`, 10, 20)
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if rs.path != "/rest/api/search" {
+		t.Errorf("path = %s, want /rest/api/search", rs.path)
+	}
+	if got := rs.query.Get("cql"); got != `space = ENG AND text ~ "runbook"` {
+		t.Errorf("cql = %q, want the passed query", got)
+	}
+	if rs.query.Get("limit") != "10" || rs.query.Get("start") != "20" {
+		t.Errorf("query = %s, want limit=10&start=20", rs.rawQuery)
+	}
+}
+
+func Test_Search_omits_zero_pagination(t *testing.T) {
+	rs := newRecordingServer(t, http.StatusOK, `{"results":[]}`)
+	c := newTestClient(t, rs.srv.URL)
+
+	_, err := c.Search(ctx(), "type = page", 0, 0)
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if rs.query.Has("limit") || rs.query.Has("start") {
+		t.Errorf("zero limit/start should be omitted, got: %s", rs.rawQuery)
+	}
+	if rs.query.Get("cql") != "type = page" {
+		t.Errorf("cql not sent: %s", rs.rawQuery)
+	}
+}

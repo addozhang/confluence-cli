@@ -41,7 +41,10 @@ Offline; reports build metadata.
 
 | Field | Type | Tier | Description |
 |---|---|---|---|
-| `instances` | string[] | stable | Configured instance keys (`scheme://host[:port][/contextpath]`). Empty array when none. Never includes any token. |
+| `instances` | object[] | stable | Configured instances. Empty array when none. Each entry: `{ key: string, alias: string \| null }`. Never includes any token. |
+
+The `alias` is the short name set with `cfl auth add --alias`, or `null` when
+the instance has no alias.
 
 ## `cfl auth whoami <url>`
 
@@ -110,6 +113,30 @@ The `type` enum is an uppercase-or-lowercase string as returned by Confluence
 | `name` | string | stable | Space name. |
 | `type` | string | stable | Space type (e.g. `global`, `personal`). |
 | `description` | string \| null | stable | Plain-text description, or `null` when the space has none. |
+
+## `cfl search`
+
+| Field | Type | Tier | Description |
+|---|---|---|---|
+| `results` | object[] | stable | Search hits in the requested window. Empty array when none. See the per-entry fields below. |
+| `start` | number | stable | Pagination start offset of this page. |
+| `limit` | number | stable | Pagination limit of this page. |
+| `size` | number | stable | Number of hits returned in this page. |
+
+Each `results` entry:
+
+| Field | Type | Tier | Description |
+|---|---|---|---|
+| `id` | string \| null | stable | Content id, or `null` for a non-content hit (e.g. a space). |
+| `title` | string | stable | Hit title. |
+| `type` | string \| null | stable | Content type (`page`, `blogpost`, ...), or `null` for a non-content hit. |
+| `spaceKey` | string \| null | stable | Key of the containing space, or `null` when not applicable. |
+| `url` | string \| null | stable | Absolute URL to the hit, or `null` when the server provides none. |
+
+A non-content result (such as a space match) is never dropped: its
+content-derived fields (`id`, `type`, `spaceKey`) are `null` while `title` and
+`url` are populated. With the default `--type page`, the common case returns
+only page hits with all fields present.
 
 ---
 

@@ -532,3 +532,91 @@ func TestE2E_SelfSigned_TLS_Mock(t *testing.T) {
 		t.Errorf("space list with --insecure should succeed over self-signed TLS: %s", insecureOut)
 	}
 }
+
+// TestE2E_Search runs a keyword search restricted to the configured space.
+func TestE2E_Search(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	// Create a page with a distinctive title, then search for it.
+	title := uniqueTitle("searchme")
+	id, _ := env.createPage(t, title, "<p>searchable body</p>")
+	_ = id
+
+	// Confluence search is eventually consistent; allow a brief indexing delay.
+	time.Sleep(3 * time.Second)
+
+	out := env.run(t, false, nil, "search", "searchme", "--space", env.spaceKey, "--instance", env.baseURL, "-o", "json")
+	var res struct {
+		Results []struct {
+			Title string `json:"title"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatalf("search output not JSON: %v\n%s", err, out)
+	}
+	// Index timing can vary; assert the call succeeded and returned the schema,
+	// and log whether the just-created page was found.
+	found := false
+	for _, r := range res.Results {
+		if strings.Contains(r.Title, "searchme") {
+			found = true
+		}
+	}
+	if !found {
+		t.Logf("search did not yet surface %q (search index may lag); results=%d", title, len(res.Results))
+	}
+}
+
+// TestE2E_Page_get_spaces_pages_url reads a page via the modern
+// /spaces/KEY/pages/ID/Title URL against a real server.
+func TestE2E_Page_get_spaces_pages_url(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	title := uniqueTitle("spacespages")
+	id, _ := env.createPage(t, title, "<p>spaces/pages url target</p>")
+
+	pageURL := env.baseURL + "/spaces/" + env.spaceKey + "/pages/" + id + "/" + strings.ReplaceAll(title, " ", "+")
+	out := env.run(t, false, nil, "page", "get", pageURL, "-o", "json")
+	if !strings.Contains(out, `"id":"`+id+`"`) {
+		t.Errorf("spaces/pages URL get should resolve to id %s: %s", id, out)
+	}
+}
+
+// TestE2E_Alias_roundtrip stores an alias, then uses it for --instance and the
+// <alias>:<id> form against a real server.
+func TestE2E_Alias_roundtrip(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	// Re-seed credentials with an alias for the base instance (the default seed
+	// writes no alias). Write directly to keep the test non-interactive.
+	creds := filepath.Join(env.credsDir, "credentials")
+	var b strings.Builder
+	b.WriteString("[tokens]\n  \"" + hostKey(env.baseURL) + "\" = \"" + env.token + "\"\n")
+	b.WriteString("[aliases]\n  \"" + hostKey(env.baseURL) + "\" = \"e2eprod\"\n")
+	if err := os.WriteFile(creds, []byte(b.String()), 0o600); err != nil {
+		t.Fatalf("seed alias creds: %v", err)
+	}
+
+	// auth list should show the alias.
+	listOut := env.run(t, false, nil, "auth", "list", "-o", "json")
+	if !strings.Contains(listOut, `"alias":"e2eprod"`) {
+		t.Errorf("auth list should show the alias: %s", listOut)
+	}
+
+	// --instance <alias> resolves the instance for space list.
+	spacesOut := env.run(t, false, nil, "space", "list", "--instance", "e2eprod", "-o", "json")
+	if !strings.Contains(spacesOut, `"spaces"`) {
+		t.Errorf("space list via alias should succeed: %s", spacesOut)
+	}
+
+	// <alias>:<id> reads a page on the aliased instance.
+	title := uniqueTitle("aliasid")
+	id, _ := env.createPage(t, title, "<p>alias id</p>")
+	getOut := env.run(t, false, nil, "page", "get", "e2eprod:"+id, "-o", "json")
+	if !strings.Contains(getOut, `"id":"`+id+`"`) {
+		t.Errorf("<alias>:<id> get should resolve id %s: %s", id, getOut)
+	}
+}

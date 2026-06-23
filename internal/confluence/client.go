@@ -153,6 +153,19 @@ func (c *Client) WhoAmI(ctx context.Context) ([]byte, error) {
 	return c.do(ctx, http.MethodGet, c.restURL("/user/current", nil), nil)
 }
 
+// Search runs a CQL query against the search endpoint. A zero limit or start is
+// omitted, relying on the Confluence server defaults.
+func (c *Client) Search(ctx context.Context, cql string, limit, start int) ([]byte, error) {
+	q := url.Values{"cql": {cql}}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if start > 0 {
+		q.Set("start", strconv.Itoa(start))
+	}
+	return c.do(ctx, http.MethodGet, c.restURL("/search", q), nil)
+}
+
 // doJSON marshals payload as the request body with a JSON content type.
 func (c *Client) doJSON(ctx context.Context, method, fullURL string, payload any) ([]byte, error) {
 	body, err := json.Marshal(payload)
