@@ -31,17 +31,6 @@ lets you edit it with version-safe updates.
 go install github.com/addozhang/cfl/cmd/cfl@latest
 ```
 
-While the repository is **private**, configure Go to fetch it directly:
-
-```sh
-export GOPRIVATE=github.com/addozhang/*
-# ensure your git is authenticated to github.com (HTTPS token or SSH)
-go install github.com/addozhang/cfl/cmd/cfl@latest
-```
-
-Without `GOPRIVATE` (and repo read access), `go install` fails resolving the
-module from the public proxy; set it as above.
-
 ### Homebrew
 
 ```sh

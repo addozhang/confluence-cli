@@ -32,7 +32,7 @@ Rationale: the project is open-source-by-default, the Go ecosystem is English-fi
 - **Release**: GoReleaser + GitHub Actions
 - **Module path**: `github.com/addozhang/cfl`; binary name `cfl`.
 - **Distribution channels**: GitHub Releases (binaries), `go install github.com/addozhang/cfl/cmd/cfl@latest`, Homebrew tap at `addozhang/homebrew-tap`.
-- **Repository visibility**: **private** during MVP. Consumers of `go install` must set `GOPRIVATE=github.com/addozhang/*` and have repo read access; CI runners use a deploy key or fine-grained PAT.
+- **Repository visibility**: **public**. `go install github.com/addozhang/cfl/cmd/cfl@latest` works without any `GOPRIVATE` configuration or repo access token.
 - **Min platforms**: macOS arm64/amd64, Linux amd64/arm64. Windows best-effort.
 
 ## Authentication Model
@@ -308,7 +308,7 @@ MVP (v0.1.0) "done" criteria — all must be true before tagging a release:
 
 - [ ] `go install github.com/addozhang/cfl/cmd/cfl@latest` produces a working `cfl` binary on macOS (arm64+amd64) and Linux (amd64+arm64).
 - [ ] `brew install addozhang/tap/cfl` produces a working `cfl` binary on the same platforms.
-- [ ] With the repo private, `GOPRIVATE=github.com/addozhang/*` + a valid token allows `go install` to succeed; without it, the failure mode is documented in README.
+- [ ] `go install github.com/addozhang/cfl/cmd/cfl@latest` succeeds from the public module proxy with no extra configuration.
 - [ ] Every MVP command runs its happy path successfully against a real Confluence Server/DC instance.
 - [ ] `cfl -o yaml` output matches `docs/schema.md` `stable` fields 100%; every response's first line is `schemaVersion: "1"`.
 - [ ] With `SSL_CERT_FILE` pointing at a valid PEM, `cfl` connects to a self-signed Confluence without `--insecure`; with an invalid path, it emits a clear error.
