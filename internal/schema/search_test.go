@@ -130,3 +130,44 @@ func Test_MapSearch_malformed_errors(t *testing.T) {
 		t.Errorf("MapSearch on malformed JSON should error")
 	}
 }
+
+// Test_MapSearch_strips_highlight reproduces the bug where Confluence's search
+// endpoint wraps matched terms in @@@hl@@@...@@@endhl@@@ highlight markers in the
+// result-level title. The clean page title must be used (content.title), and any
+// residual highlight markers must be stripped — never surfaced to the user.
+func Test_MapSearch_strips_highlight(t *testing.T) {
+	const fixture = `{
+      "results": [
+        {
+          "content": { "id": "12345", "type": "page", "title": "Deploy Runbook", "space": { "key": "ENG" } },
+          "title": "@@@hl@@@Deploy@@@endhl@@@ Runbook",
+          "url": "/spaces/ENG/pages/12345/Deploy+Runbook"
+        },
+        {
+          "title": "A @@@hl@@@Space@@@endhl@@@ Result",
+          "url": "/spaces/OPS"
+        }
+      ],
+      "start": 0, "limit": 25, "size": 2
+    }`
+
+	res, err := MapSearch("https://wiki.example.com", []byte(fixture))
+	if err != nil {
+		t.Fatalf("MapSearch error: %v", err)
+	}
+
+	// A content hit must use the clean page title, with no highlight markers.
+	if res.Results[0].Title != "Deploy Runbook" {
+		t.Errorf("Results[0].Title = %q, want clean 'Deploy Runbook' (no highlight markers)", res.Results[0].Title)
+	}
+	// A non-content hit falls back to the result title, but markers are stripped.
+	if res.Results[1].Title != "A Space Result" {
+		t.Errorf("Results[1].Title = %q, want 'A Space Result' with markers stripped", res.Results[1].Title)
+	}
+	// No result may contain the highlight markers anywhere.
+	for i, r := range res.Results {
+		if containsValue([]byte(r.Title), "@@@hl@@@") || containsValue([]byte(r.Title), "@@@endhl@@@") {
+			t.Errorf("Results[%d].Title leaked highlight markers: %q", i, r.Title)
+		}
+	}
+}

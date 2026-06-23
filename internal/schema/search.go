@@ -3,6 +3,7 @@ package schema
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // SearchResult is one hit from `cfl search`. id/type/spaceKey are pointers so a
@@ -56,7 +57,7 @@ func MapSearch(base string, raw []byte) (SearchResults, error) {
 		Size:    wire.Size,
 	}
 	for _, r := range wire.Results {
-		sr := SearchResult{Title: r.Title}
+		sr := SearchResult{}
 		if r.Content != nil {
 			if r.Content.ID != "" {
 				id := r.Content.ID
@@ -66,13 +67,18 @@ func MapSearch(base string, raw []byte) (SearchResults, error) {
 				typ := r.Content.Type
 				sr.Type = &typ
 			}
-			if r.Content.Title != "" && sr.Title == "" {
-				sr.Title = r.Content.Title
-			}
 			if r.Content.Space != nil && r.Content.Space.Key != "" {
 				key := r.Content.Space.Key
 				sr.SpaceKey = &key
 			}
+		}
+		// Prefer the clean content title; the result-level title is wrapped in
+		// Confluence search highlight markers (@@@hl@@@…@@@endhl@@@). Strip those
+		// markers from whichever title we use so they never reach the user.
+		if r.Content != nil && r.Content.Title != "" {
+			sr.Title = stripHighlight(r.Content.Title)
+		} else {
+			sr.Title = stripHighlight(r.Title)
 		}
 		if r.URL != "" {
 			u := base + r.URL
@@ -81,4 +87,13 @@ func MapSearch(base string, raw []byte) (SearchResults, error) {
 		out.Results = append(out.Results, sr)
 	}
 	return out, nil
+}
+
+// stripHighlight removes Confluence search highlight markers from a string. The
+// search endpoint wraps matched terms in @@@hl@@@…@@@endhl@@@ for front-end
+// emphasis; those markers are noise in a CLI title.
+func stripHighlight(s string) string {
+	s = strings.ReplaceAll(s, "@@@hl@@@", "")
+	s = strings.ReplaceAll(s, "@@@endhl@@@", "")
+	return s
 }
