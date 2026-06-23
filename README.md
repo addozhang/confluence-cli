@@ -25,17 +25,28 @@ lets you edit it with version-safe updates.
 
 ## Install
 
-### `go install`
+### Homebrew (macOS / Linux)
+
+```sh
+brew install addozhang/tap/cfl
+```
+
+Pulls from the tap repo [`addozhang/homebrew-tap`](https://github.com/addozhang/homebrew-tap).
+
+### go install
 
 ```sh
 go install github.com/addozhang/cfl/cmd/cfl@latest
 ```
 
-### Homebrew
+Requires Go 1.22+. The Go toolchain fetches the module directly from GitHub; no
+proxy or token is needed for this public repo.
 
-```sh
-brew install addozhang/tap/cfl
-```
+### Download a pre-built binary
+
+Download `cfl_<version>_<os>_<arch>.tar.gz` from the
+[Releases page](https://github.com/addozhang/confluence-cli/releases), extract,
+and move `cfl` onto your `PATH`.
 
 ### From source
 

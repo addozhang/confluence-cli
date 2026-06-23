@@ -54,10 +54,14 @@ changelog:
 
 brews:
   - name: cfl
+    ids:
+      - cfl
     repository:
       owner: addozhang
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      # Uses the HOMEBREW_TAP_GITHUB_TOKEN secret in the release workflow.
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
     homepage: "https://github.com/addozhang/confluence-cli"
     description: "URL-native Confluence Server/DC CLI"
     license: "MIT"
