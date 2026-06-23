@@ -209,6 +209,207 @@ func TestE2E_Page_not_found(t *testing.T) {
 	}
 }
 
+// uniqueTitle returns a collision-resistant page title for a test run.
+func uniqueTitle(prefix string) string {
+	return "cfl-e2e-" + prefix + "-" + time.Now().UTC().Format("20060102-150405.000")
+}
+
+// createPage creates a page and registers cleanup; returns its id and version.
+func (e *e2eEnv) createPage(t *testing.T, title, body string, extra ...string) (string, int) {
+	t.Helper()
+	args := append([]string{
+		"page", "create",
+		"--instance", e.baseURL,
+		"--space", e.spaceKey,
+		"--title", title,
+		"--body", body,
+		"-o", "json",
+	}, extra...)
+	out := e.run(t, false, nil, args...)
+	var created struct {
+		ID      string `json:"id"`
+		Version int    `json:"version"`
+	}
+	if err := json.Unmarshal([]byte(out), &created); err != nil {
+		t.Fatalf("create output not JSON: %v\n%s", err, out)
+	}
+	if created.ID == "" {
+		t.Fatalf("create did not return an id: %s", out)
+	}
+	t.Cleanup(func() { _ = e.run(t, false, nil, "page", "delete", created.ID, "--yes") })
+	return created.ID, created.Version
+}
+
+// TestE2E_Page_create_with_parent verifies the parent/child relationship is
+// real: the child reports the parent as its ancestor, and the parent's children
+// listing includes the child. Neither can be faked by a mock.
+func TestE2E_Page_create_with_parent(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	parentID, _ := env.createPage(t, uniqueTitle("parent"), "<p>parent</p>")
+	childTitle := uniqueTitle("child")
+	childID, _ := env.createPage(t, childTitle, "<p>child</p>", "--parent", parentID)
+
+	// The child's ancestors must include the parent.
+	childOut := env.run(t, false, nil, "page", "get", childID, "-o", "json")
+	var child struct {
+		ParentID  *string `json:"parentId"`
+		Ancestors []struct {
+			ID string `json:"id"`
+		} `json:"ancestors"`
+	}
+	if err := json.Unmarshal([]byte(childOut), &child); err != nil {
+		t.Fatalf("child get not JSON: %v\n%s", err, childOut)
+	}
+	if child.ParentID == nil || *child.ParentID != parentID {
+		t.Errorf("child parentId = %v, want %s", child.ParentID, parentID)
+	}
+	foundAncestor := false
+	for _, a := range child.Ancestors {
+		if a.ID == parentID {
+			foundAncestor = true
+		}
+	}
+	if !foundAncestor {
+		t.Errorf("child ancestors %v should include parent %s", child.Ancestors, parentID)
+	}
+
+	// The parent's children listing must include the child.
+	childrenOut := env.run(t, false, nil, "page", "children", parentID, "-o", "json")
+	if !strings.Contains(childrenOut, `"id":"`+childID+`"`) {
+		t.Errorf("parent children should include child %s: %s", childID, childrenOut)
+	}
+}
+
+// TestE2E_Page_get_by_display_url verifies the display-URL title-lookup round
+// trip against a real server: cfl resolves space+title to an id, then reads it.
+func TestE2E_Page_get_by_display_url(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	title := uniqueTitle("display")
+	id, _ := env.createPage(t, title, "<p>display url target</p>")
+
+	// Build a display URL with the '+'-encoded title.
+	displayURL := env.baseURL + "/display/" + env.spaceKey + "/" + strings.ReplaceAll(title, " ", "+")
+	out := env.run(t, false, nil, "page", "get", displayURL, "-o", "json")
+	if !strings.Contains(out, `"id":"`+id+`"`) {
+		t.Errorf("display-url get should resolve to id %s: %s", id, out)
+	}
+}
+
+// TestE2E_Page_sequential_updates verifies repeated version-safe updates against
+// a real server: each `cfl page update` re-reads the current version and submits
+// current+1, so two sequential updates take the page v1 -> v2 -> v3 without the
+// client ever guessing the number. (A deterministic stale-version 409 cannot be
+// forced through the CLI alone because each update re-reads first; the 409
+// translation path is covered by the Test_cmd_page_update_version_conflict unit
+// test against an httptest server.)
+func TestE2E_Page_sequential_updates(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	title := uniqueTitle("sequpdate")
+	id, _ := env.createPage(t, title, "<p>v1</p>")
+
+	env.run(t, false, nil, "page", "update", id, "--body", "<p>v2</p>")
+	out := env.run(t, false, nil, "page", "update", id, "--body", "<p>v3</p>", "-o", "json")
+	if !strings.Contains(out, `"version":3`) {
+		t.Errorf("two sequential updates should reach version 3: %s", out)
+	}
+}
+
+// TestE2E_Output_raw_and_yaml verifies the output formats against real data:
+// -o raw returns the verbatim Confluence JSON (with internals like _links),
+// while -o yaml is the schema view with schemaVersion on the first line.
+func TestE2E_Output_raw_and_yaml(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	title := uniqueTitle("output")
+	id, _ := env.createPage(t, title, "<p>output formats</p>")
+
+	// -o raw: the verbatim Confluence response exposes internals the schema drops.
+	rawOut := env.run(t, false, nil, "page", "get", id, "-o", "raw")
+	if !strings.Contains(rawOut, "_links") && !strings.Contains(rawOut, "_expandable") {
+		t.Errorf("-o raw should expose Confluence internals (_links/_expandable): %s", rawOut)
+	}
+	if strings.Contains(rawOut, "schemaVersion") {
+		t.Errorf("-o raw must NOT inject schemaVersion: %s", rawOut)
+	}
+
+	// -o yaml: schema view, schemaVersion first line, no Confluence internals.
+	yamlOut := env.run(t, false, nil, "page", "get", id, "-o", "yaml")
+	if !strings.HasPrefix(strings.TrimLeft(yamlOut, "\n"), "schemaVersion:") {
+		t.Errorf("-o yaml first line should be schemaVersion: %s", yamlOut)
+	}
+	if strings.Contains(yamlOut, "_expandable") {
+		t.Errorf("-o yaml must not leak Confluence internals: %s", yamlOut)
+	}
+}
+
+// TestE2E_Page_storage_format_roundtrip verifies a non-trivial storage-format
+// body survives create -> read unchanged, proving cfl passes XHTML through and
+// the server accepts it.
+func TestE2E_Page_storage_format_roundtrip(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	title := uniqueTitle("storage")
+	body := "<h2>Heading</h2><ul><li>one</li><li>two</li></ul><p><strong>bold</strong> and <em>italic</em></p>"
+	id, _ := env.createPage(t, title, body)
+
+	out := env.run(t, false, nil, "page", "get", id, "-o", "json")
+	var page struct {
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(out), &page); err != nil {
+		t.Fatalf("get not JSON: %v\n%s", err, out)
+	}
+	for _, fragment := range []string{"<h2>Heading</h2>", "<li>one</li>", "<strong>bold</strong>", "<em>italic</em>"} {
+		if !strings.Contains(page.Body, fragment) {
+			t.Errorf("stored body lost fragment %q; got: %s", fragment, page.Body)
+		}
+	}
+}
+
+// TestE2E_Bare_id_resolution verifies that a bare numeric page id resolves
+// against the single configured instance and reads the right page.
+func TestE2E_Bare_id_resolution(t *testing.T) {
+	env := loadEnv(t)
+	// This relies on exactly one instance being configured. The seeded creds
+	// file may contain the TLS host too; skip if so to keep the bare-id rule
+	// unambiguous.
+	if env.tlsURL != "" {
+		t.Skip("bare-id resolution requires a single configured instance; TLS tier also configured, skipping")
+	}
+	env.build(t)
+
+	title := uniqueTitle("bareid")
+	id, _ := env.createPage(t, title, "<p>bare id</p>")
+
+	out := env.run(t, false, nil, "page", "get", id, "-o", "json")
+	if !strings.Contains(out, `"id":"`+id+`"`) {
+		t.Errorf("bare-id get should resolve to id %s: %s", id, out)
+	}
+}
+
+// TestE2E_Auth_list verifies the configured instance key is listed and no token
+// is leaked.
+func TestE2E_Auth_list(t *testing.T) {
+	env := loadEnv(t)
+	env.build(t)
+
+	out := env.run(t, false, nil, "auth", "list", "-o", "json")
+	if !strings.Contains(out, hostKey(env.baseURL)) {
+		t.Errorf("auth list should include the configured instance %s: %s", hostKey(env.baseURL), out)
+	}
+	if strings.Contains(out, env.token) {
+		t.Errorf("auth list leaked the token: %s", out)
+	}
+}
+
 // TestE2E_SelfSigned_TLS verifies the SSL_CERT_FILE and --insecure paths against
 // the nginx self-signed proxy tier. Skipped unless the TLS env is configured.
 func TestE2E_SelfSigned_TLS(t *testing.T) {
