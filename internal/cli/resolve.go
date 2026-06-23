@@ -91,6 +91,56 @@ func resolveInstance(value string, store *auth.Store) (string, error) {
 	return value, nil
 }
 
+// resolveTarget resolves a page target argument plus an optional --instance
+// value into a Ref, applying the instance semantics:
+//
+//   - A full URL (or /spaces|display|pages|rest shape) carries its own host;
+//     --instance is ignored and the host comes from the URL.
+//   - An <alias>:<id> form carries its instance via the alias; --instance is
+//     ignored.
+//   - A bare numeric id has no host: if --instance is given, it selects the
+//     instance (URL or alias); otherwise it falls back to the single configured
+//     instance, and errors when zero or multiple are configured.
+func resolveTarget(arg, instance string, store *auth.Store) (confluenceurl.Ref, error) {
+	// A bare numeric id with an explicit --instance: resolve the instance and
+	// attach the id. This is the path that makes --instance meaningful for ids.
+	if instance != "" && isBareNumeric(arg) {
+		target, err := resolveInstance(instance, store)
+		if err != nil {
+			return confluenceurl.Ref{}, err
+		}
+		base, ctx := splitInstanceKey(keyForInstance(target))
+		return confluenceurl.Ref{BaseURL: base, ContextPath: ctx, PageID: arg}, nil
+	}
+	// Everything else (URLs, alias:id, or bare id without --instance) is handled
+	// by resolveRef. For a URL or alias:id the host is intrinsic, so --instance
+	// is correctly ignored here.
+	return resolveRef(arg, store)
+}
+
+// keyForInstance returns the credential key for an instance value that has
+// already been alias-expanded (so it is a URL or instance key). It normalizes a
+// URL to its host key.
+func keyForInstance(instanceURL string) string {
+	if key, err := auth.KeyFromURL(instanceURL); err == nil {
+		return key
+	}
+	return instanceURL
+}
+
+// isBareNumeric reports whether arg is a non-empty all-digits string.
+func isBareNumeric(arg string) bool {
+	if arg == "" {
+		return false
+	}
+	for _, r := range arg {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // requireCredential verifies a credential resolves for the given request URL,
 // returning first-run onboarding guidance (naming the exact `cfl auth add`
 // command) when none is configured.

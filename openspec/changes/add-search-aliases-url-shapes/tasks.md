@@ -22,6 +22,8 @@
 - [x] 3.1 Write tests in `internal/cli` for instance resolution: `--instance <alias>` expands to the instance base URL+context; `--instance <url>` stays a URL; a value with `://`/`.`/`/` is never treated as an alias.
 - [x] 3.2 Write tests for the `<alias>:<id>` target form: known alias + numeric id resolves the instance (valid with multiple instances configured); unknown alias prefix errors with a `cfl auth list` suggestion; a URL is not mistaken for the form.
 - [x] 3.3 Implement an alias pre-pass: resolve `--instance` values and `<alias>:<id>` targets before URL parsing (`resolveRef`/`refForInstance` siblings), using the auth store. Keep `confluenceurl` alias-unaware.
+- [x] 3.4 Write tests for the page instance-selection rules (page spec "Select the target instance"): bare ID + multiple instances + no `--instance` errors; bare ID + `--instance <url|alias>` resolves; bare ID + single instance needs no flag; a full URL ignores `--instance`; `<alias>:<id>` selects its instance.
+- [x] 3.5 Implement `resolveTarget(arg, instance, store)` encoding those rules and refactor page `prepare` to resolve the Ref first (then check the credential against the resolved host), fixing the `<alias>:<id>` credential-lookup path. Add the `--instance` flag to `page get/update/delete/children`.
 
 ## 4. auth add/list wiring for aliases
 

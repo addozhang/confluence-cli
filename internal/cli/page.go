@@ -30,28 +30,34 @@ func newPageCmd(deps *Deps) *cobra.Command {
 	return cmd
 }
 
+// addInstanceFlag registers the shared --instance flag on a page command. It
+// selects the target instance (URL or alias) for a bare page ID; it is ignored
+// when the argument is a full URL or an <alias>:<id> form.
+func addInstanceFlag(cmd *cobra.Command, instance *string) {
+	cmd.Flags().StringVar(instance, "instance", "",
+		"instance URL or alias, required for a bare page ID when several instances are configured (ignored for full URLs)")
+}
+
 // prepare resolves an argument into a ref, a client, and the concrete page id,
 // performing the display-URL title lookup when the ref carries a space+title
 // instead of an id. It centralizes the auth check and the common resolution
-// flow shared by every page subcommand.
-func prepare(cmd *cobra.Command, deps *Deps, arg string) (*confluence.Client, confluenceurl.Ref, string, error) {
+// flow shared by every page subcommand. The instance argument selects the target
+// instance for a bare page ID (ignored when the argument is a full URL or an
+// <alias>:<id> form, which carry their own host).
+func prepare(cmd *cobra.Command, deps *Deps, arg, instance string) (*confluence.Client, confluenceurl.Ref, string, error) {
 	store, err := deps.LoadStore()
 	if err != nil {
 		return nil, confluenceurl.Ref{}, "", err
 	}
-	if err := requireCredential(arg, store); err != nil {
-		// A bare numeric id has no host to check; defer to resolveRef instead.
-		if !looksBareNumeric(arg) {
-			return nil, confluenceurl.Ref{}, "", err
-		}
-	}
 
-	ref, err := resolveRef(arg, store)
+	// Resolve the argument (+ optional --instance) into a Ref. resolveTarget
+	// handles URLs, bare ids (against --instance or the single instance), and
+	// the <alias>:<id> form uniformly, producing a concrete base URL/host.
+	ref, err := resolveTarget(arg, instance, store)
 	if err != nil {
 		return nil, confluenceurl.Ref{}, "", err
 	}
-	// For a bare id resolved to an instance, re-check the credential now that we
-	// know the host.
+	// Now that we know the host, require a stored credential for it.
 	if err := requireCredential(ref.HostKey(), store); err != nil {
 		return nil, confluenceurl.Ref{}, "", err
 	}
@@ -102,12 +108,13 @@ func lookupPageID(cmd *cobra.Command, _ *Deps, client *confluence.Client, ref co
 }
 
 func newPageGetCmd(deps *Deps) *cobra.Command {
-	return &cobra.Command{
+	var instance string
+	cmd := &cobra.Command{
 		Use:   "get <url-or-id>",
 		Short: "Read a Confluence page",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ref, id, err := prepare(cmd, deps, args[0])
+			client, ref, id, err := prepare(cmd, deps, args[0], instance)
 			if err != nil {
 				return err
 			}
@@ -125,6 +132,8 @@ func newPageGetCmd(deps *Deps) *cobra.Command {
 			return output.Write(cmd.OutOrStdout(), page, deps.OutputFormat)
 		},
 	}
+	addInstanceFlag(cmd, &instance)
+	return cmd
 }
 
 func newPageCreateCmd(deps *Deps) *cobra.Command {
@@ -198,7 +207,7 @@ func newPageCreateCmd(deps *Deps) *cobra.Command {
 }
 
 func newPageUpdateCmd(deps *Deps) *cobra.Command {
-	var bodyFlag, title string
+	var bodyFlag, title, instance string
 	cmd := &cobra.Command{
 		Use:   "update <url-or-id> --body <input> [--title T]",
 		Short: "Update a Confluence page (version-safe)",
@@ -208,7 +217,7 @@ func newPageUpdateCmd(deps *Deps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client, ref, id, err := prepare(cmd, deps, args[0])
+			client, ref, id, err := prepare(cmd, deps, args[0], instance)
 			if err != nil {
 				return err
 			}
@@ -241,18 +250,20 @@ func newPageUpdateCmd(deps *Deps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&bodyFlag, "body", "", "storage-format body: @file, - for stdin, or a literal string (required)")
 	cmd.Flags().StringVar(&title, "title", "", "new title (optional; preserved when omitted)")
+	addInstanceFlag(cmd, &instance)
 	_ = cmd.MarkFlagRequired("body")
 	return cmd
 }
 
 func newPageDeleteCmd(deps *Deps) *cobra.Command {
 	var yes bool
+	var instance string
 	cmd := &cobra.Command{
 		Use:   "delete <url-or-id>",
 		Short: "Move a Confluence page to the trash",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ref, id, err := prepare(cmd, deps, args[0])
+			client, ref, id, err := prepare(cmd, deps, args[0], instance)
 			if err != nil {
 				return err
 			}
@@ -280,16 +291,18 @@ func newPageDeleteCmd(deps *Deps) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm deletion without an interactive prompt")
+	addInstanceFlag(cmd, &instance)
 	return cmd
 }
 
 func newPageChildrenCmd(deps *Deps) *cobra.Command {
-	return &cobra.Command{
+	var instance string
+	cmd := &cobra.Command{
 		Use:   "children <url-or-id>",
 		Short: "List a page's direct children",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ref, id, err := prepare(cmd, deps, args[0])
+			client, ref, id, err := prepare(cmd, deps, args[0], instance)
 			if err != nil {
 				return err
 			}
@@ -307,6 +320,8 @@ func newPageChildrenCmd(deps *Deps) *cobra.Command {
 			return output.Write(cmd.OutOrStdout(), children, deps.OutputFormat)
 		},
 	}
+	addInstanceFlag(cmd, &instance)
+	return cmd
 }
 
 // errDeletionCancelled is returned when the user declines a delete prompt, so
@@ -362,18 +377,6 @@ func readBodyInput(cmd *cobra.Command, flag string) (string, error) {
 	default:
 		return flag, nil
 	}
-}
-
-func looksBareNumeric(arg string) bool {
-	if arg == "" {
-		return false
-	}
-	for _, r := range arg {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // isInteractive reports whether stdin is a terminal, used to decide whether a

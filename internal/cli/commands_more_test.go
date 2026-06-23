@@ -255,3 +255,31 @@ func Test_cmd_page_get_spaces_pages_url(t *testing.T) {
 		t.Errorf("output should carry id 98765, got: %s", out)
 	}
 }
+
+func Test_cmd_page_get_alias_qualified_id(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/rest/api/content/12345") {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"id":"12345","title":"T","space":{"key":"ENG"},"version":{"number":1},"ancestors":[],"body":{"storage":{"value":"<p/>","representation":"storage"}}}`))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	creds := filepath.Join(dir, "credentials")
+	s := auth.NewStore(nil)
+	_ = s.AddWithAlias(srv.URL, "tok", "prod")
+	// A second instance, to prove alias:id is unambiguous.
+	s.Add("https://other.example.com", "tok2")
+	if err := s.Save(creds); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	out, _, err := runCmd(t, creds, "", "page", "get", "prod:12345", "-o", "json")
+	if err != nil {
+		t.Fatalf("page get prod:12345 error: %v", err)
+	}
+	if !strings.Contains(out, `"id":"12345"`) {
+		t.Errorf("output should carry id 12345, got: %s", out)
+	}
+}

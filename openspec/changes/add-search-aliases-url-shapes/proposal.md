@@ -11,6 +11,7 @@ Three gaps surfaced once `cfl` met real Confluence instances and multi-instance 
 - **New page URL shape**: `cfl` parses `https://host/spaces/KEY/pages/ID/Title` (and its context-path and trailing-slash variants) into a page `Ref` carrying space key, numeric page ID, and title.
 - **New `cfl search` command**: a keyword search with friendly flags (`--space`, `--type`, `--limit`, `--start`) that `cfl` compiles into Confluence CQL and runs against the search REST endpoint, returning a stable `results` schema. A `--cql` flag is the **highest-precedence** input: when supplied it is used as the complete query and overrides the friendly inputs, so power users can drop a full CQL string in without removing other flags.
 - **Instance aliases**: `cfl auth add <url> --alias <name>` stores a short alias for an instance. Anywhere a command accepts an instance (`--instance <alias>`) or a target, the alias resolves to the stored base URL + context path. A bare numeric page ID may be qualified as `<alias>:<id>` to pick the instance unambiguously even when several are configured. `cfl auth list` shows aliases.
+- **Instance selection for page commands**: `page get/update/delete/children` gain an `--instance <url-or-alias>` flag. A full URL or an `<alias>:<id>` argument carries its own instance and ignores `--instance`; a bare numeric ID uses `--instance` when given, falls back to the single configured instance, and requires `--instance` (or `<alias>:<id>`) when several instances are configured.
 
 ### Not Doing (non-goals)
 
@@ -31,6 +32,7 @@ Three gaps surfaced once `cfl` met real Confluence instances and multi-instance 
 
 - `url-resolution`: Additionally parse the `/spaces/KEY/pages/ID/Title` page shape (with context-path and trailing-slash/fragment variants) into a page `Ref`; accept an `<alias>:<id>` qualified bare-ID form.
 - `auth`: Store an optional per-instance alias on `cfl auth add --alias <name>`; resolve an alias to its instance base URL + context path; surface aliases in `cfl auth list`; reject duplicate or malformed aliases.
+- `page`: Add an `--instance <url-or-alias>` flag to `get`/`update`/`delete`/`children` for selecting the target instance of a bare page ID; a full URL or `<alias>:<id>` argument carries its own instance and ignores the flag; a bare ID requires an instance when several are configured.
 
 ## Impact
 

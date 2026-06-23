@@ -97,11 +97,11 @@ cfl page get prod:12345               # <alias>:<id> picks the instance for a ba
 ### page
 
 ```sh
-cfl page get <url-or-id>
-cfl page create --space KEY --title T --body <input> [--parent ID] [--instance URL]
-cfl page update <url-or-id> --body <input> [--title T]
-cfl page delete <url-or-id> [--yes]
-cfl page children <url-or-id>
+cfl page get <url-or-id> [--instance URL|alias]
+cfl page create --space KEY --title T --body <input> [--parent ID] [--instance URL|alias]
+cfl page update <url-or-id> --body <input> [--title T] [--instance URL|alias]
+cfl page delete <url-or-id> [--yes] [--instance URL|alias]
+cfl page children <url-or-id> [--instance URL|alias]
 ```
 
 `--body` accepts three forms:
@@ -112,6 +112,11 @@ cfl page children <url-or-id>
 
 Bodies are **Confluence storage format (XHTML)**, passed through unchanged — no
 Markdown/wiki conversion.
+
+`--instance` selects the target instance **for a bare page ID**. A full URL or an
+`<alias>:<id>` argument carries its own instance, so `--instance` is ignored
+there. A bare numeric ID needs `--instance` (or the `<alias>:<id>` form) only when
+several instances are configured; with a single instance it is optional.
 
 `cfl page delete` requires explicit intent: pass `--yes`, or confirm the
 interactive prompt. In a non-interactive session it refuses without `--yes`.
