@@ -118,11 +118,25 @@ func Parse(arg string) (Ref, error) {
 		return ref, nil
 
 	case "spaces":
-		// .../spaces/KEY
+		// .../spaces/KEY                         -> space
+		// .../spaces/KEY/pages/ID[/Title]        -> page by id within space
 		if len(segments) < 2 {
 			return Ref{}, fmt.Errorf("spaces URL is missing a space key")
 		}
 		ref.SpaceKey = segments[1]
+		// A /pages/{ID} continuation makes this a page reference; the ID is
+		// authoritative (no title lookup needed). Title, if present, is for
+		// display only.
+		if len(segments) >= 4 && segments[2] == "pages" {
+			id := segments[3]
+			if !numericRe.MatchString(id) {
+				return Ref{}, fmt.Errorf("page id %q is not a valid numeric page ID", id)
+			}
+			ref.PageID = id
+			if len(segments) >= 5 {
+				ref.Title = decodeTitle(segments[4])
+			}
+		}
 		return ref, nil
 
 	default:

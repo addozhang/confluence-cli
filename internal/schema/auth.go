@@ -14,10 +14,17 @@ type WhoAmI struct {
 	DisplayName *string `json:"displayName"`
 }
 
-// AuthList is the output of `cfl auth list`: the configured instance keys only,
-// never any token.
+// AuthInstance is one configured instance in `cfl auth list`: its key and an
+// optional alias. The token is never represented.
+type AuthInstance struct {
+	Key   string  `json:"key"`
+	Alias *string `json:"alias"`
+}
+
+// AuthList is the output of `cfl auth list`: the configured instances (key +
+// optional alias) only, never any token.
 type AuthList struct {
-	Instances []string `json:"instances"`
+	Instances []AuthInstance `json:"instances"`
 }
 
 // MapWhoAmI maps a Confluence current-user response into a WhoAmI for the given
@@ -38,11 +45,18 @@ func MapWhoAmI(host string, raw []byte) (WhoAmI, error) {
 	return w, nil
 }
 
-// NewAuthList builds an AuthList from configured instance keys, ensuring a
-// non-nil slice so it serializes as [] when empty.
-func NewAuthList(keys []string) AuthList {
-	if keys == nil {
-		keys = []string{}
+// NewAuthList builds an AuthList from configured instance keys and a key→alias
+// map, ensuring a non-nil slice so it serializes as [] when empty. An instance
+// without an alias gets a null alias.
+func NewAuthList(keys []string, aliases map[string]string) AuthList {
+	instances := make([]AuthInstance, 0, len(keys))
+	for _, k := range keys {
+		inst := AuthInstance{Key: k}
+		if a, ok := aliases[k]; ok && a != "" {
+			alias := a
+			inst.Alias = &alias
+		}
+		instances = append(instances, inst)
 	}
-	return AuthList{Instances: keys}
+	return AuthList{Instances: instances}
 }

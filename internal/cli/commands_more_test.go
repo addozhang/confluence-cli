@@ -56,12 +56,15 @@ func Test_cmd_auth_list_prints_keys_not_tokens(t *testing.T) {
 		t.Errorf("auth list leaked a token: %q", out)
 	}
 	var decoded struct {
-		Instances []string `json:"instances"`
+		Instances []struct {
+			Key   string  `json:"key"`
+			Alias *string `json:"alias"`
+		} `json:"instances"`
 	}
 	if jerr := json.Unmarshal([]byte(out), &decoded); jerr != nil {
 		t.Fatalf("output not JSON: %v", jerr)
 	}
-	if len(decoded.Instances) != 1 || decoded.Instances[0] != "https://wiki.example.com" {
+	if len(decoded.Instances) != 1 || decoded.Instances[0].Key != "https://wiki.example.com" {
 		t.Errorf("instances = %v, want one key", decoded.Instances)
 	}
 }

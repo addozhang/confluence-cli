@@ -10,10 +10,12 @@ import (
 )
 
 // credentialsFile is the on-disk TOML shape. Tokens are stored under a single
-// table keyed by the instance key. The key itself contains characters (`:`,
-// `/`) that require quoting, which the TOML encoder handles.
+// table keyed by the instance key (a plain key->token map, so versions without
+// alias support can still read it). Aliases live in a separate optional table
+// keyed by the same instance key, so a v0.1 reader simply ignores them.
 type credentialsFile struct {
-	Tokens map[string]string `toml:"tokens"`
+	Tokens  map[string]string `toml:"tokens"`
+	Aliases map[string]string `toml:"aliases,omitempty"`
 }
 
 // Load reads the credentials file at path into a Store. A missing file is not
@@ -32,7 +34,7 @@ func Load(path string) (*Store, error) {
 	if err := toml.Unmarshal(data, &cf); err != nil {
 		return nil, fmt.Errorf("parse credentials %s: %w", path, err)
 	}
-	return NewStore(cf.Tokens), nil
+	return newStoreWithAliases(cf.Tokens, cf.Aliases), nil
 }
 
 // Save writes the store to path as TOML with file mode 0600, creating parent
@@ -46,7 +48,11 @@ func (s *Store) Save(path string) error {
 	}
 
 	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(credentialsFile{Tokens: s.tokens}); err != nil {
+	cf := credentialsFile{Tokens: s.tokens}
+	if len(s.aliases) > 0 {
+		cf.Aliases = s.aliases
+	}
+	if err := toml.NewEncoder(&buf).Encode(cf); err != nil {
 		return fmt.Errorf("encode credentials: %w", err)
 	}
 

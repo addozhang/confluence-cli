@@ -90,13 +90,27 @@ func Test_MapWhoAmI_no_display_name_is_null(t *testing.T) {
 }
 
 func Test_NewAuthList_empty_is_non_nil(t *testing.T) {
-	list := NewAuthList(nil)
+	list := NewAuthList(nil, nil)
 	if list.Instances == nil {
 		t.Errorf("Instances must be non-nil")
 	}
 	encoded, _ := json.Marshal(list)
 	if !containsValue(encoded, `"instances":[]`) {
 		t.Errorf("empty auth list must encode instances as [], got: %s", encoded)
+	}
+}
+
+func Test_NewAuthList_with_alias(t *testing.T) {
+	list := NewAuthList(
+		[]string{"https://wiki.example.com", "https://other.example.com"},
+		map[string]string{"https://wiki.example.com": "prod"},
+	)
+	encoded, _ := json.Marshal(list)
+	if !containsValue(encoded, `"alias":"prod"`) {
+		t.Errorf("aliased instance should carry its alias: %s", encoded)
+	}
+	if !containsValue(encoded, `"alias":null`) {
+		t.Errorf("alias-less instance should carry a null alias: %s", encoded)
 	}
 }
 

@@ -53,9 +53,10 @@ func newAuthCmd(deps *Deps) *cobra.Command {
 	return cmd
 }
 
-// newAuthAddCmd builds `cfl auth add <url>`.
+// newAuthAddCmd builds `cfl auth add <url> [--alias <name>]`.
 func newAuthAddCmd(deps *Deps) *cobra.Command {
-	return &cobra.Command{
+	var alias string
+	cmd := &cobra.Command{
 		Use:   "add <url>",
 		Short: "Store a Personal Access Token for a Confluence instance",
 		Args:  cobra.ExactArgs(1),
@@ -92,14 +93,32 @@ func newAuthAddCmd(deps *Deps) *cobra.Command {
 				}
 			}
 
-			store.Add(key, token)
+			if alias != "" {
+				// AddWithAlias validates the alias and rejects duplicates before
+				// the store is saved.
+				if err := store.AddWithAlias(key, token, alias); err != nil {
+					return &cflerrors.CFLError{
+						Code:       cflerrors.CodeConfig,
+						Message:    err.Error() + ".",
+						Suggestion: "Choose a different alias, or run `cfl auth list` to see existing aliases.",
+					}
+				}
+			} else {
+				store.Add(key, token)
+			}
 			if err := deps.SaveStore(store); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Stored token for %s\n", key)
+			if alias != "" {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Stored token for %s (alias %q)\n", key, alias)
+			} else {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Stored token for %s\n", key)
+			}
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&alias, "alias", "", "short alias for this instance (e.g. prod), usable as --instance <alias>")
+	return cmd
 }
 
 // newAuthListCmd builds `cfl auth list`.
@@ -113,7 +132,7 @@ func newAuthListCmd(deps *Deps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return output.Write(cmd.OutOrStdout(), schema.NewAuthList(store.List()), deps.OutputFormat)
+			return output.Write(cmd.OutOrStdout(), schema.NewAuthList(store.List(), store.Aliases()), deps.OutputFormat)
 		},
 	}
 }

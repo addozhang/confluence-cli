@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/addozhang/cfl/internal/auth"
@@ -9,11 +10,35 @@ import (
 	cflerrors "github.com/addozhang/cfl/internal/errors"
 )
 
+// aliasQualifiedIDRe matches the <alias>:<id> form: an alias name, a colon, and
+// a purely numeric page id. Values containing a scheme, dot, or slash are URLs
+// and never match here.
+var aliasQualifiedIDRe = regexp.MustCompile(`^([a-zA-Z0-9_-]+):([0-9]+)$`)
+
 // resolveRef parses a command argument into a confluenceurl.Ref, applying the
 // bare-numeric-ID rule (D3): a bare id has no host, so the base URL and context
 // path are taken from the credential store, and the form is valid only when
-// exactly one instance is configured.
+// exactly one instance is configured. It also resolves the <alias>:<id> form,
+// which selects the instance unambiguously even with multiple configured.
 func resolveRef(arg string, store *auth.Store) (confluenceurl.Ref, error) {
+	// <alias>:<id> — only when there is no URL punctuation, so a URL like
+	// https://host/... is never mistaken for it.
+	if !strings.Contains(arg, "://") && !strings.Contains(arg, "/") && !strings.Contains(arg, ".") {
+		if m := aliasQualifiedIDRe.FindStringSubmatch(arg); m != nil {
+			alias, id := m[1], m[2]
+			key, ok := store.ResolveAlias(alias)
+			if !ok {
+				return confluenceurl.Ref{}, &cflerrors.CFLError{
+					Code:       cflerrors.CodeConfig,
+					Message:    fmt.Sprintf("Unknown instance alias %q in %q. Run `cfl auth list` to see configured aliases.", alias, arg),
+					Suggestion: "Add it with `cfl auth add <url> --alias " + alias + "`.",
+				}
+			}
+			base, ctx := splitInstanceKey(key)
+			return confluenceurl.Ref{BaseURL: base, ContextPath: ctx, PageID: id}, nil
+		}
+	}
+
 	ref, err := confluenceurl.Parse(arg)
 	if err != nil {
 		return confluenceurl.Ref{}, cflerrors.WrapURLParse(arg, err)
@@ -41,9 +66,29 @@ func resolveRef(arg string, store *auth.Store) (confluenceurl.Ref, error) {
 		return confluenceurl.Ref{}, &cflerrors.CFLError{
 			Code:       cflerrors.CodeConfig,
 			Message:    fmt.Sprintf("A bare page ID (%q) is ambiguous because multiple instances are configured.", arg),
-			Suggestion: "Pass a full Confluence URL to identify the target instance.",
+			Suggestion: "Pass a full Confluence URL, or use `<alias>:<id>` to pick the instance.",
 		}
 	}
+}
+
+// resolveInstance turns an --instance value into a Confluence instance URL: a
+// value matching a configured alias is expanded to that instance's key;
+// otherwise the value is treated as a URL. A value with no URL punctuation
+// (no scheme, dot, or slash) that is not a known alias is rejected, because it
+// is neither a usable URL nor a configured alias.
+func resolveInstance(value string, store *auth.Store) (string, error) {
+	looksLikeURL := strings.Contains(value, "://") || strings.Contains(value, ".") || strings.Contains(value, "/")
+	if !looksLikeURL {
+		if key, ok := store.ResolveAlias(value); ok {
+			return key, nil
+		}
+		return "", &cflerrors.CFLError{
+			Code:       cflerrors.CodeConfig,
+			Message:    fmt.Sprintf("Unknown instance alias %q. Run `cfl auth list` to see configured aliases, or pass a full Confluence URL.", value),
+			Suggestion: "Add an alias with `cfl auth add <url> --alias <name>`.",
+		}
+	}
+	return value, nil
 }
 
 // requireCredential verifies a credential resolves for the given request URL,

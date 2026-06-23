@@ -7,6 +7,7 @@ package auth
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -22,10 +23,15 @@ var markerSegments = map[string]bool{
 	"pages":   true,
 }
 
-// Store holds instance keys mapped to PAT tokens. It is safe for sequential
-// command use; cfl issues no concurrent requests.
+// Store holds instance keys mapped to PAT tokens, plus optional per-instance
+// aliases. It is safe for sequential command use; cfl issues no concurrent
+// requests.
 type Store struct {
 	tokens map[string]string
+	// aliases maps an instance key to its short alias. Stored separately from
+	// tokens so the on-disk [tokens] table stays a plain key->token map,
+	// readable by versions without alias support.
+	aliases map[string]string
 }
 
 // NewStore builds a Store from an existing key→token map. A nil map yields an
@@ -34,7 +40,67 @@ func NewStore(tokens map[string]string) *Store {
 	if tokens == nil {
 		tokens = map[string]string{}
 	}
-	return &Store{tokens: tokens}
+	return &Store{tokens: tokens, aliases: map[string]string{}}
+}
+
+// newStoreWithAliases builds a Store from both maps (used by Load).
+func newStoreWithAliases(tokens, aliases map[string]string) *Store {
+	s := NewStore(tokens)
+	if aliases != nil {
+		s.aliases = aliases
+	}
+	return s
+}
+
+var aliasRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// AddWithAlias stores or overwrites the token for key and binds the given alias
+// to it. The alias must match [a-zA-Z0-9_-]+ and must not already be bound to a
+// different instance. Re-binding the same alias to the same instance (with a new
+// token) is idempotent.
+func (s *Store) AddWithAlias(key, token, alias string) error {
+	if !aliasRe.MatchString(alias) {
+		return fmt.Errorf("alias %q must match [a-zA-Z0-9_-]+", alias)
+	}
+	if existing, ok := s.aliases[key]; ok && existing == alias {
+		// same instance already holds this alias; just update the token below
+	} else if owner, taken := s.aliasOwner(alias); taken && owner != key {
+		return fmt.Errorf("alias %q is already in use by %s", alias, owner)
+	}
+	s.tokens[key] = token
+	s.aliases[key] = alias
+	return nil
+}
+
+// ResolveAlias maps an alias name to its instance key.
+func (s *Store) ResolveAlias(alias string) (string, bool) {
+	key, ok := s.aliasOwner(alias)
+	return key, ok
+}
+
+// AliasOf returns the alias bound to an instance key, if any.
+func (s *Store) AliasOf(key string) (string, bool) {
+	a, ok := s.aliases[key]
+	return a, ok
+}
+
+// Aliases returns a copy of the key→alias map.
+func (s *Store) Aliases() map[string]string {
+	out := make(map[string]string, len(s.aliases))
+	for k, v := range s.aliases {
+		out[k] = v
+	}
+	return out
+}
+
+// aliasOwner finds the instance key bound to an alias.
+func (s *Store) aliasOwner(alias string) (string, bool) {
+	for key, a := range s.aliases {
+		if a == alias {
+			return key, true
+		}
+	}
+	return "", false
 }
 
 // KeyFromURL derives the credential-lookup key for a URL: scheme + lowercased
@@ -90,6 +156,7 @@ func (s *Store) Remove(key string) bool {
 		return false
 	}
 	delete(s.tokens, key)
+	delete(s.aliases, key)
 	return true
 }
 
