@@ -114,11 +114,11 @@ func newSearchCmd(deps *Deps) *cobra.Command {
 			return output.Write(cmd.OutOrStdout(), results, deps.OutputFormat)
 		},
 	}
-	cmd.Flags().StringVar(&space, "space", "", "restrict to a space key")
+	cmd.Flags().StringVarP(&space, "space", "s", "", "restrict to a space key")
 	cmd.Flags().StringVar(&contentType, "type", "", "content type: page or blogpost (default page)")
 	cmd.Flags().StringVar(&cql, "cql", "", "raw CQL query (highest precedence; overrides the term/--space/--type)")
-	cmd.Flags().IntVar(&limit, "limit", 0, "max results (server default when omitted)")
+	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (server default when omitted)")
 	cmd.Flags().IntVar(&start, "start", 0, "pagination start offset (server default when omitted)")
-	cmd.Flags().StringVar(&instance, "instance", "", "instance URL or alias (optional when a single instance is configured)")
+	cmd.Flags().StringVarP(&instance, "instance", "i", "", "instance URL or alias (optional when a single instance is configured)")
 	return cmd
 }

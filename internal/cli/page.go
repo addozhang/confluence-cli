@@ -34,7 +34,7 @@ func newPageCmd(deps *Deps) *cobra.Command {
 // selects the target instance (URL or alias) for a bare page ID; it is ignored
 // when the argument is a full URL or an <alias>:<id> form.
 func addInstanceFlag(cmd *cobra.Command, instance *string) {
-	cmd.Flags().StringVar(instance, "instance", "",
+	cmd.Flags().StringVarP(instance, "instance", "i", "",
 		"instance URL or alias, required for a bare page ID when several instances are configured (ignored for full URLs)")
 }
 
@@ -195,11 +195,11 @@ func newPageCreateCmd(deps *Deps) *cobra.Command {
 			return writePageSummary(cmd, deps, ref.HostKey(), raw)
 		},
 	}
-	cmd.Flags().StringVar(&spaceKey, "space", "", "space key (required)")
-	cmd.Flags().StringVar(&title, "title", "", "page title (required)")
-	cmd.Flags().StringVar(&bodyFlag, "body", "", "storage-format body: @file, - for stdin, or a literal string (required)")
-	cmd.Flags().StringVar(&parentID, "parent", "", "parent page id (optional)")
-	cmd.Flags().StringVar(&instance, "instance", "", "instance URL (optional when a single instance is configured)")
+	cmd.Flags().StringVarP(&spaceKey, "space", "s", "", "space key (required)")
+	cmd.Flags().StringVarP(&title, "title", "t", "", "page title (required)")
+	cmd.Flags().StringVarP(&bodyFlag, "body", "b", "", "storage-format body: @file, - for stdin, or a literal string (required)")
+	cmd.Flags().StringVarP(&parentID, "parent", "p", "", "parent page id (optional)")
+	cmd.Flags().StringVarP(&instance, "instance", "i", "", "instance URL or alias (optional when a single instance is configured)")
 	_ = cmd.MarkFlagRequired("space")
 	_ = cmd.MarkFlagRequired("title")
 	_ = cmd.MarkFlagRequired("body")
@@ -248,8 +248,8 @@ func newPageUpdateCmd(deps *Deps) *cobra.Command {
 			return writePageSummary(cmd, deps, ref.HostKey(), raw)
 		},
 	}
-	cmd.Flags().StringVar(&bodyFlag, "body", "", "storage-format body: @file, - for stdin, or a literal string (required)")
-	cmd.Flags().StringVar(&title, "title", "", "new title (optional; preserved when omitted)")
+	cmd.Flags().StringVarP(&bodyFlag, "body", "b", "", "storage-format body: @file, - for stdin, or a literal string (required)")
+	cmd.Flags().StringVarP(&title, "title", "t", "", "new title (optional; preserved when omitted)")
 	addInstanceFlag(cmd, &instance)
 	_ = cmd.MarkFlagRequired("body")
 	return cmd
@@ -290,7 +290,7 @@ func newPageDeleteCmd(deps *Deps) *cobra.Command {
 			return output.Write(cmd.OutOrStdout(), schema.DeleteResult{ID: id, Status: "trashed"}, deps.OutputFormat)
 		},
 	}
-	cmd.Flags().BoolVar(&yes, "yes", false, "confirm deletion without an interactive prompt")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without an interactive prompt")
 	addInstanceFlag(cmd, &instance)
 	return cmd
 }

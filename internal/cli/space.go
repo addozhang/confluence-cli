@@ -62,9 +62,9 @@ func newSpaceListCmd(deps *Deps) *cobra.Command {
 			return output.Write(cmd.OutOrStdout(), list, deps.OutputFormat)
 		},
 	}
-	cmd.Flags().IntVar(&limit, "limit", 0, "max spaces to return (server default when omitted)")
+	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max spaces to return (server default when omitted)")
 	cmd.Flags().IntVar(&start, "start", 0, "pagination start offset (server default when omitted)")
-	cmd.Flags().StringVar(&instance, "instance", "", "instance URL (optional when a single instance is configured)")
+	cmd.Flags().StringVarP(&instance, "instance", "i", "", "instance URL or alias (optional when a single instance is configured)")
 	return cmd
 }
 
@@ -110,7 +110,7 @@ func newSpaceGetCmd(deps *Deps) *cobra.Command {
 			return output.Write(cmd.OutOrStdout(), detail, deps.OutputFormat)
 		},
 	}
-	cmd.Flags().StringVar(&instance, "instance", "", "instance URL (optional when a single instance is configured)")
+	cmd.Flags().StringVarP(&instance, "instance", "i", "", "instance URL or alias (optional when a single instance is configured)")
 	return cmd
 }
 

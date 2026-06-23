@@ -169,6 +169,27 @@ cfl version                 # offline; prints version/commit/date
 | `--insecure` | off | Disable TLS verification (prints a stderr warning). |
 | `--debug` | off | Log the raw HTTP exchange to stderr (`Authorization` redacted). |
 
+### Flag shortcuts
+
+Common flags have single-letter short forms:
+
+| Short | Long | Used by |
+|---|---|---|
+| `-o` | `--output` | all commands |
+| `-i` | `--instance` | page, space, search |
+| `-s` | `--space` | page create, search |
+| `-t` | `--title` | page create / update |
+| `-b` | `--body` | page create / update |
+| `-l` | `--limit` | space list, search |
+| `-p` | `--parent` | page create |
+| `-y` | `--yes` | page delete |
+
+```sh
+cfl page get 12345 -i prod
+cfl search "runbook" -s ENG -l 10 -i prod
+cfl page create -s ENG -t "Notes" -b @notes.xhtml -i prod
+```
+
 ### Custom CAs / self-signed Confluence
 
 `cfl` honors the `SSL_CERT_FILE` environment variable with no flag. Point it at a
