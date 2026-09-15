@@ -90,7 +90,7 @@ func Test_MapWhoAmI_no_display_name_is_null(t *testing.T) {
 }
 
 func Test_NewAuthList_empty_is_non_nil(t *testing.T) {
-	list := NewAuthList(nil, nil)
+	list := NewAuthList(nil, nil, nil)
 	if list.Instances == nil {
 		t.Errorf("Instances must be non-nil")
 	}
@@ -104,6 +104,7 @@ func Test_NewAuthList_with_alias(t *testing.T) {
 	list := NewAuthList(
 		[]string{"https://wiki.example.com", "https://other.example.com"},
 		map[string]string{"https://wiki.example.com": "prod"},
+		nil,
 	)
 	encoded, _ := json.Marshal(list)
 	if !containsValue(encoded, `"alias":"prod"`) {

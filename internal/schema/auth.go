@@ -14,11 +14,15 @@ type WhoAmI struct {
 	DisplayName *string `json:"displayName"`
 }
 
-// AuthInstance is one configured instance in `cfl auth list`: its key and an
-// optional alias. The token is never represented.
+// AuthInstance is one configured instance in `cfl auth list`: its key, an
+// optional alias, and whether its token lives in the OS keyring. The token is
+// never represented.
 type AuthInstance struct {
 	Key   string  `json:"key"`
 	Alias *string `json:"alias"`
+	// Secure is true when the token is stored in the OS keyring instead of the
+	// credentials file (opt-in via `cfl auth add --secure-storage`).
+	Secure bool `json:"secure"`
 }
 
 // AuthList is the output of `cfl auth list`: the configured instances (key +
@@ -45,13 +49,18 @@ func MapWhoAmI(host string, raw []byte) (WhoAmI, error) {
 	return w, nil
 }
 
-// NewAuthList builds an AuthList from configured instance keys and a key→alias
-// map, ensuring a non-nil slice so it serializes as [] when empty. An instance
-// without an alias gets a null alias.
-func NewAuthList(keys []string, aliases map[string]string) AuthList {
+// NewAuthList builds an AuthList from configured instance keys, a key→alias
+// map, and the subset of keys whose tokens live in the OS keyring, ensuring a
+// non-nil slice so it serializes as [] when empty. An instance without an alias
+// gets a null alias; plain instances report secure as false.
+func NewAuthList(keys []string, aliases map[string]string, secureKeys []string) AuthList {
+	secure := make(map[string]bool, len(secureKeys))
+	for _, k := range secureKeys {
+		secure[k] = true
+	}
 	instances := make([]AuthInstance, 0, len(keys))
 	for _, k := range keys {
-		inst := AuthInstance{Key: k}
+		inst := AuthInstance{Key: k, Secure: secure[k]}
 		if a, ok := aliases[k]; ok && a != "" {
 			alias := a
 			inst.Alias = &alias

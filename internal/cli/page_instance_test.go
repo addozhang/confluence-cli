@@ -27,8 +27,8 @@ func Test_page_bare_id_multi_instance_requires_instance(t *testing.T) {
 	dir := t.TempDir()
 	creds := filepath.Join(dir, "credentials")
 	s := auth.NewStore(nil)
-	s.Add("https://a.example.com", "t1")
-	s.Add("https://b.example.com", "t2")
+	_ = s.Add("https://a.example.com", "t1", false)
+	_ = s.Add("https://b.example.com", "t2", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -47,8 +47,8 @@ func Test_page_bare_id_with_instance_flag(t *testing.T) {
 	dir := t.TempDir()
 	creds := filepath.Join(dir, "credentials")
 	s := auth.NewStore(nil)
-	s.Add(srv.URL, "tok")
-	s.Add("https://other.example.com", "tok2") // a second instance
+	_ = s.Add(srv.URL, "tok", false)
+	_ = s.Add("https://other.example.com", "tok2", false) // a second instance
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -68,8 +68,8 @@ func Test_page_bare_id_with_instance_alias(t *testing.T) {
 	dir := t.TempDir()
 	creds := filepath.Join(dir, "credentials")
 	s := auth.NewStore(nil)
-	_ = s.AddWithAlias(srv.URL, "tok", "prod")
-	s.Add("https://other.example.com", "tok2")
+	_ = s.AddWithAlias(srv.URL, "tok", "prod", false)
+	_ = s.Add("https://other.example.com", "tok2", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -105,8 +105,8 @@ func Test_page_url_ignores_instance_flag(t *testing.T) {
 	dir := t.TempDir()
 	creds := filepath.Join(dir, "credentials")
 	s := auth.NewStore(nil)
-	s.Add(srv.URL, "tok")
-	_ = s.AddWithAlias("https://wrong.example.com", "tok2", "wrong")
+	_ = s.Add(srv.URL, "tok", false)
+	_ = s.AddWithAlias("https://wrong.example.com", "tok2", "wrong", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

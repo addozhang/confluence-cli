@@ -9,7 +9,7 @@ import (
 
 func Test_resolveInstance_alias_expands_to_url(t *testing.T) {
 	store := auth.NewStore(nil)
-	_ = store.AddWithAlias("https://wiki.example.com/confluence", "tok", "prod")
+	_ = store.AddWithAlias("https://wiki.example.com/confluence", "tok", "prod", false)
 
 	got, err := resolveInstance("prod", store)
 	if err != nil {
@@ -61,10 +61,10 @@ func Test_resolveInstance_unknown_alias_like_value_errors(t *testing.T) {
 
 func Test_resolveRef_alias_qualified_bare_id(t *testing.T) {
 	store := auth.NewStore(nil)
-	_ = store.AddWithAlias("https://wiki.example.com/confluence", "tok", "prod")
+	_ = store.AddWithAlias("https://wiki.example.com/confluence", "tok", "prod", false)
 	// Add a second instance to prove the alias-qualified form is unambiguous
 	// even with multiple instances configured.
-	store.Add("https://other.example.com", "tok2")
+	_ = store.Add("https://other.example.com", "tok2", false)
 
 	ref, err := resolveRef("prod:12345", store)
 	if err != nil {
@@ -80,7 +80,7 @@ func Test_resolveRef_alias_qualified_bare_id(t *testing.T) {
 
 func Test_resolveRef_unknown_alias_prefix_errors(t *testing.T) {
 	store := auth.NewStore(nil)
-	store.Add("https://wiki.example.com", "tok")
+	_ = store.Add("https://wiki.example.com", "tok", false)
 
 	_, err := resolveRef("staging:12345", store)
 	if err == nil {
@@ -93,7 +93,7 @@ func Test_resolveRef_unknown_alias_prefix_errors(t *testing.T) {
 
 func Test_resolveRef_url_not_mistaken_for_alias_id(t *testing.T) {
 	store := auth.NewStore(nil)
-	store.Add("https://wiki.example.com", "tok")
+	_ = store.Add("https://wiki.example.com", "tok", false)
 
 	// A URL contains '://' so it must be parsed as a URL, not <alias>:<id>.
 	ref, err := resolveRef("https://wiki.example.com/spaces/ENG/pages/12345", store)
@@ -107,7 +107,7 @@ func Test_resolveRef_url_not_mistaken_for_alias_id(t *testing.T) {
 
 func Test_resolveRef_alias_colon_nonnumeric_not_alias_form(t *testing.T) {
 	store := auth.NewStore(nil)
-	_ = store.AddWithAlias("https://wiki.example.com", "tok", "prod")
+	_ = store.AddWithAlias("https://wiki.example.com", "tok", "prod", false)
 
 	// "prod:abc" — alias known but the suffix is not numeric, so it is NOT the
 	// alias-qualified bare-id form; it falls through to normal parsing and

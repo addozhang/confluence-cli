@@ -147,6 +147,11 @@ func isBareNumeric(arg string) bool {
 func requireCredential(rawURL string, store *auth.Store) error {
 	_, ok, err := store.Resolve(rawURL)
 	if err != nil {
+		// A keyring-backed credential that cannot be read is a config problem,
+		// not a bad URL; translateKeyringError renders the matching remediation.
+		if kerr := translateKeyringError(err); kerr != nil {
+			return kerr
+		}
 		return cflerrors.WrapURLParse(rawURL, err)
 	}
 	if !ok {

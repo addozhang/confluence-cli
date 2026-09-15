@@ -43,7 +43,7 @@ func Test_cmd_auth_add_duplicate_alias_rejected(t *testing.T) {
 	creds := filepath.Join(dir, "credentials")
 	// Seed an instance already holding alias 'prod'.
 	s := auth.NewStore(nil)
-	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod")
+	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -61,8 +61,8 @@ func Test_cmd_auth_list_shows_alias(t *testing.T) {
 	dir := t.TempDir()
 	creds := filepath.Join(dir, "credentials")
 	s := auth.NewStore(nil)
-	_ = s.AddWithAlias("https://wiki.example.com", "SECRET", "prod")
-	s.Add("https://other.example.com", "SECRET2")
+	_ = s.AddWithAlias("https://wiki.example.com", "SECRET", "prod", false)
+	_ = s.Add("https://other.example.com", "SECRET2", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

@@ -5,11 +5,14 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/zalando/go-keyring"
 )
 
 // markerSegments delimit the context-path prefix from the Confluence-specific
@@ -32,6 +35,10 @@ type Store struct {
 	// tokens so the on-disk [tokens] table stays a plain key->token map,
 	// readable by versions without alias support.
 	aliases map[string]string
+	// secure records the instance keys whose real token lives in the OS
+	// keyring. For those keys tokens[key] is "", so the on-disk file never
+	// holds the secret and stays readable by versions without keyring support.
+	secure map[string]bool
 }
 
 // NewStore builds a Store from an existing key→token map. A nil map yields an
@@ -40,14 +47,22 @@ func NewStore(tokens map[string]string) *Store {
 	if tokens == nil {
 		tokens = map[string]string{}
 	}
-	return &Store{tokens: tokens, aliases: map[string]string{}}
+	return &Store{tokens: tokens, aliases: map[string]string{}, secure: map[string]bool{}}
 }
 
-// newStoreWithAliases builds a Store from both maps (used by Load).
-func newStoreWithAliases(tokens, aliases map[string]string) *Store {
+// newStoreWithAliases builds a Store from all three on-disk maps (used by
+// Load). Keys marked secure have their file token forced to "": the real token
+// lives only in the keyring, and a stray plaintext value must not linger.
+func newStoreWithAliases(tokens map[string]string, aliases map[string]string, secure map[string]bool) *Store {
 	s := NewStore(tokens)
 	if aliases != nil {
 		s.aliases = aliases
+	}
+	if secure != nil {
+		s.secure = secure
+	}
+	for key := range s.secure {
+		s.tokens[key] = ""
 	}
 	return s
 }
@@ -57,8 +72,9 @@ var aliasRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 // AddWithAlias stores or overwrites the token for key and binds the given alias
 // to it. The alias must match [a-zA-Z0-9_-]+ and must not already be bound to a
 // different instance. Re-binding the same alias to the same instance (with a new
-// token) is idempotent.
-func (s *Store) AddWithAlias(key, token, alias string) error {
+// token) is idempotent. With secure set, the token is written to the OS keyring
+// instead of the store; the write happens only after alias validation passes.
+func (s *Store) AddWithAlias(key, token, alias string, secure bool) error {
 	if !aliasRe.MatchString(alias) {
 		return fmt.Errorf("alias %q must match [a-zA-Z0-9_-]+", alias)
 	}
@@ -67,7 +83,9 @@ func (s *Store) AddWithAlias(key, token, alias string) error {
 	} else if owner, taken := s.aliasOwner(alias); taken && owner != key {
 		return fmt.Errorf("alias %q is already in use by %s", alias, owner)
 	}
-	s.tokens[key] = token
+	if err := s.Add(key, token, secure); err != nil {
+		return err
+	}
 	s.aliases[key] = alias
 	return nil
 }
@@ -144,17 +162,40 @@ func contextPathOf(path string) string {
 	return "/" + strings.Join(parts, "/")
 }
 
-// Add stores or overwrites the token for the given instance key.
-func (s *Store) Add(key, token string) {
+// Add stores or overwrites the token for the given instance key. With secure
+// set, the token is written to the OS keyring under the instance key and the
+// in-memory token entry is set to "", so a later Save records only that the
+// instance uses the keyring. Re-adding a secure key without the flag clears the
+// secure marker and removes the now-stale keyring entry (best effort).
+func (s *Store) Add(key, token string, secure bool) error {
+	if !secure && s.secure[key] {
+		_ = keyringDelete(keyringService, key)
+	}
+	if secure {
+		if err := keyringSet(keyringService, key, token); err != nil {
+			return &KeyringError{Key: key, Err: err}
+		}
+		s.tokens[key] = ""
+		s.secure[key] = true
+		return nil
+	}
+	delete(s.secure, key)
 	s.tokens[key] = token
+	return nil
 }
 
 // Remove deletes the token for key. It reports whether an entry was present, so
-// callers can distinguish a real removal from an idempotent no-op.
+// callers can distinguish a real removal from an idempotent no-op. Removing a
+// secure key also deletes its keyring entry (best effort: a keyring miss must
+// not block the removal, the entry is unreachable either way).
 func (s *Store) Remove(key string) bool {
 	if _, ok := s.tokens[key]; !ok {
 		return false
 	}
+	if s.secure[key] {
+		_ = keyringDelete(keyringService, key)
+	}
+	delete(s.secure, key)
 	delete(s.tokens, key)
 	delete(s.aliases, key)
 	return true
@@ -171,12 +212,25 @@ func (s *Store) List() []string {
 	return keys
 }
 
+// SecureKeys returns the instance keys whose tokens live in the OS keyring, in
+// sorted order. `cfl auth list` exposes them through the per-instance secure
+// flag; it never returns any token value.
+func (s *Store) SecureKeys() []string {
+	keys := make([]string, 0, len(s.secure))
+	for k := range s.secure {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // Resolve selects the most specific stored token for a request URL. A key
 // matches when its scheme+host equal the request's and the request path either
 // equals the key's context path or continues past it at a "/" segment boundary.
 // Among matches, the longest context path wins; a host-only key is the shortest
 // prefix. It returns (token, true, nil) on a match, ("", false, nil) when no key
-// matches, or an error when the request URL is unparseable.
+// matches, or an error when the request URL is unparseable or the matched key
+// is secure and its keyring entry cannot be read.
 func (s *Store) Resolve(rawURL string) (string, bool, error) {
 	reqScheme, reqHost, reqPath, err := splitRequest(rawURL)
 	if err != nil {
@@ -200,6 +254,16 @@ func (s *Store) Resolve(rawURL string) (string, bool, error) {
 	}
 	if bestLen < 0 {
 		return "", false, nil
+	}
+	if s.secure[bestKey] {
+		token, err := keyringGet(keyringService, bestKey)
+		if errors.Is(err, keyring.ErrNotFound) {
+			return "", false, &KeyringError{Key: bestKey, Missing: true, Err: err}
+		}
+		if err != nil {
+			return "", false, &KeyringError{Key: bestKey, Err: err}
+		}
+		return token, true, nil
 	}
 	return s.tokens[bestKey], true, nil
 }

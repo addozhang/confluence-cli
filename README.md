@@ -108,10 +108,10 @@ cfl page get 12345          # works when exactly one instance is configured
 ### auth
 
 ```sh
-cfl auth add <url> [--alias <name>]   # store a PAT (hidden prompt); optional short alias
-cfl auth list                         # list configured instances + aliases (never tokens)
-cfl auth remove <url>                 # remove a stored credential (idempotent)
-cfl auth whoami <url>                 # verify a stored token against its instance
+cfl auth add <url> [--alias <name>] [--secure-storage]   # store a PAT (hidden prompt); optional short alias
+cfl auth list                                            # list configured instances + aliases (never tokens)
+cfl auth remove <url>                                    # remove a stored credential (idempotent)
+cfl auth whoami <url>                                    # verify a stored token against its instance
 ```
 
 An **alias** is a short name for an instance. Once set, use it anywhere an
@@ -122,6 +122,13 @@ cfl auth add https://wiki.example.com --alias prod
 cfl space list --instance prod        # alias instead of the full URL
 cfl page get prod:12345               # <alias>:<id> picks the instance for a bare page ID
 ```
+
+By default the PAT is written to the credentials file. Pass `--secure-storage`
+(or set `CFL_SECURE_STORAGE=1`) to keep the token in the OS keyring (macOS
+Keychain, Windows Credential Manager, or the freedesktop Secret Service)
+instead; the credentials file then only records that the instance uses the
+keyring, and `cfl auth list` marks it with `secure: true`. Removing the
+credential (or re-adding it without the flag) deletes the keyring entry.
 
 ### page
 
@@ -279,10 +286,17 @@ There are no intermediate command-result codes. The exact value within the
 
 ## Credentials
 
-Tokens are stored in plaintext TOML at `~/.config/cfl/credentials` (file mode
-`0600`), the same posture as `~/.aws/credentials` and `~/.kube/config`. The
-lookup key is `scheme://host[:port]` plus an optional context-path prefix, so one
-host can front several reverse-proxy-mounted Confluence instances.
+By default, tokens are stored in plaintext TOML at `~/.config/cfl/credentials`
+(file mode `0600`), the same posture as `~/.aws/credentials` and
+`~/.kube/config`. The lookup key is `scheme://host[:port]` plus an optional
+context-path prefix, so one host can front several reverse-proxy-mounted
+Confluence instances.
+
+For setups where even mode-`0600` plaintext is too much, `cfl auth add
+--secure-storage` keeps the token in the OS keyring instead. The credentials
+file still lists the instance (with an empty token plus a `[secure]` marker, so
+older `cfl` versions keep working), but the secret itself lives only in the
+keyring under service name `cfl`, keyed by the instance key.
 
 ## Development
 

@@ -41,10 +41,15 @@ Offline; reports build metadata.
 
 | Field | Type | Tier | Description |
 |---|---|---|---|
-| `instances` | object[] | stable | Configured instances. Empty array when none. Each entry: `{ key: string, alias: string \| null }`. Never includes any token. |
+| `instances` | object[] | stable | Configured instances. Empty array when none. Each entry: `{ key: string, alias: string \| null, secure: bool }`. Never includes any token. |
+| `instances[].key` | string | stable | The instance key (`scheme://host[:port][/contextpath]`). |
+| `instances[].alias` | string \| null | stable | The short name set with `cfl auth add --alias`, or `null` when the instance has no alias. |
+| `instances[].secure` | bool | experimental | `true` when the token lives in the OS keyring (`cfl auth add --secure-storage`); `false` for the default credentials-file storage. |
 
 The `alias` is the short name set with `cfl auth add --alias`, or `null` when
-the instance has no alias.
+the instance has no alias. `secure` is additive output: it never carries token
+material, and `false` remains the value for every instance added without
+`--secure-storage`.
 
 ## `cfl auth whoami <url>`
 

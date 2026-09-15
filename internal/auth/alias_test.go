@@ -9,7 +9,7 @@ import (
 
 func Test_Add_with_alias_and_ResolveAlias(t *testing.T) {
 	s := NewStore(nil)
-	if err := s.AddWithAlias("https://wiki.example.com", "tok", "prod"); err != nil {
+	if err := s.AddWithAlias("https://wiki.example.com", "tok", "prod", false); err != nil {
 		t.Fatalf("AddWithAlias error: %v", err)
 	}
 
@@ -33,7 +33,7 @@ func Test_ResolveAlias_unknown_is_miss(t *testing.T) {
 func Test_AddWithAlias_rejects_malformed_alias(t *testing.T) {
 	s := NewStore(nil)
 	for _, bad := range []string{"has space", "with/slash", "with:colon", "with.dot", ""} {
-		if err := s.AddWithAlias("https://wiki.example.com", "tok", bad); err == nil {
+		if err := s.AddWithAlias("https://wiki.example.com", "tok", bad, false); err == nil {
 			t.Errorf("AddWithAlias should reject malformed alias %q", bad)
 		}
 	}
@@ -41,10 +41,10 @@ func Test_AddWithAlias_rejects_malformed_alias(t *testing.T) {
 
 func Test_AddWithAlias_rejects_duplicate_on_different_instance(t *testing.T) {
 	s := NewStore(nil)
-	if err := s.AddWithAlias("https://a.example.com", "t1", "prod"); err != nil {
+	if err := s.AddWithAlias("https://a.example.com", "t1", "prod", false); err != nil {
 		t.Fatalf("first add: %v", err)
 	}
-	err := s.AddWithAlias("https://b.example.com", "t2", "prod")
+	err := s.AddWithAlias("https://b.example.com", "t2", "prod", false)
 	if err == nil {
 		t.Fatalf("adding alias 'prod' to a second instance should be rejected")
 	}
@@ -59,11 +59,11 @@ func Test_AddWithAlias_rejects_duplicate_on_different_instance(t *testing.T) {
 
 func Test_AddWithAlias_idempotent_same_instance(t *testing.T) {
 	s := NewStore(nil)
-	if err := s.AddWithAlias("https://wiki.example.com", "t1", "prod"); err != nil {
+	if err := s.AddWithAlias("https://wiki.example.com", "t1", "prod", false); err != nil {
 		t.Fatalf("first add: %v", err)
 	}
 	// Re-adding the same instance+alias (new token) is allowed.
-	if err := s.AddWithAlias("https://wiki.example.com", "t2", "prod"); err != nil {
+	if err := s.AddWithAlias("https://wiki.example.com", "t2", "prod", false); err != nil {
 		t.Errorf("re-adding same instance+alias should be idempotent, got: %v", err)
 	}
 	if tok, _, _ := s.Resolve("https://wiki.example.com/x"); tok != "t2" {
@@ -73,8 +73,8 @@ func Test_AddWithAlias_idempotent_same_instance(t *testing.T) {
 
 func Test_AliasOf(t *testing.T) {
 	s := NewStore(nil)
-	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod")
-	s.Add("https://other.example.com", "tok2") // no alias
+	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod", false)
+	_ = s.Add("https://other.example.com", "tok2", false) // no alias
 
 	if a, ok := s.AliasOf("https://wiki.example.com"); !ok || a != "prod" {
 		t.Errorf("AliasOf(wiki) = (%q, %v), want (prod, true)", a, ok)
@@ -87,8 +87,8 @@ func Test_AliasOf(t *testing.T) {
 func Test_Save_Load_round_trip_with_alias(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "credentials")
 	s := NewStore(nil)
-	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod")
-	s.Add("https://other.example.com", "tok2")
+	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod", false)
+	_ = s.Add("https://other.example.com", "tok2", false)
 	if err := s.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -132,7 +132,7 @@ func Test_v02_file_readable_as_v01_tokens(t *testing.T) {
 	// binary can still read the tokens (forward compatibility).
 	path := filepath.Join(t.TempDir(), "credentials")
 	s := NewStore(nil)
-	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod")
+	_ = s.AddWithAlias("https://wiki.example.com", "tok", "prod", false)
 	if err := s.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}

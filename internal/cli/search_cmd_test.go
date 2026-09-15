@@ -143,7 +143,7 @@ func Test_cmd_search_via_alias(t *testing.T) {
 	dir := t.TempDir()
 	creds := dir + "/credentials"
 	s := auth.NewStore(nil)
-	_ = s.AddWithAlias(srv.URL, "tok", "prod")
+	_ = s.AddWithAlias(srv.URL, "tok", "prod", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

@@ -24,8 +24,8 @@ func Test_flag_shortcut_instance_on_page_get(t *testing.T) {
 	dir := t.TempDir()
 	creds := filepath.Join(dir, "credentials")
 	s := auth.NewStore(nil)
-	_ = s.AddWithAlias(srv.URL, "tok", "prod")
-	s.Add("https://other.example.com", "tok2")
+	_ = s.AddWithAlias(srv.URL, "tok", "prod", false)
+	_ = s.Add("https://other.example.com", "tok2", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

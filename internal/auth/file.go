@@ -12,10 +12,14 @@ import (
 // credentialsFile is the on-disk TOML shape. Tokens are stored under a single
 // table keyed by the instance key (a plain key->token map, so versions without
 // alias support can still read it). Aliases live in a separate optional table
-// keyed by the same instance key, so a v0.1 reader simply ignores them.
+// keyed by the same instance key, so a v0.1 reader simply ignores them. Secure
+// lists the instance keys whose real tokens live in the OS keyring; Tokens[key]
+// is "" for those keys, so the file never holds the secret and readers without
+// keyring support still parse it (they just see an empty token).
 type credentialsFile struct {
 	Tokens  map[string]string `toml:"tokens"`
 	Aliases map[string]string `toml:"aliases,omitempty"`
+	Secure  map[string]bool   `toml:"secure,omitempty"`
 }
 
 // Load reads the credentials file at path into a Store. A missing file is not
@@ -34,7 +38,7 @@ func Load(path string) (*Store, error) {
 	if err := toml.Unmarshal(data, &cf); err != nil {
 		return nil, fmt.Errorf("parse credentials %s: %w", path, err)
 	}
-	return newStoreWithAliases(cf.Tokens, cf.Aliases), nil
+	return newStoreWithAliases(cf.Tokens, cf.Aliases, cf.Secure), nil
 }
 
 // Save writes the store to path as TOML with file mode 0600, creating parent
@@ -51,6 +55,12 @@ func (s *Store) Save(path string) error {
 	cf := credentialsFile{Tokens: s.tokens}
 	if len(s.aliases) > 0 {
 		cf.Aliases = s.aliases
+	}
+	if len(s.secure) > 0 {
+		cf.Secure = make(map[string]bool, len(s.secure))
+		for k, v := range s.secure {
+			cf.Secure[k] = v
+		}
 	}
 	if err := toml.NewEncoder(&buf).Encode(cf); err != nil {
 		return fmt.Errorf("encode credentials: %w", err)

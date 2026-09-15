@@ -268,9 +268,9 @@ func Test_cmd_page_get_alias_qualified_id(t *testing.T) {
 	dir := t.TempDir()
 	creds := filepath.Join(dir, "credentials")
 	s := auth.NewStore(nil)
-	_ = s.AddWithAlias(srv.URL, "tok", "prod")
+	_ = s.AddWithAlias(srv.URL, "tok", "prod", false)
 	// A second instance, to prove alias:id is unambiguous.
-	s.Add("https://other.example.com", "tok2")
+	_ = s.Add("https://other.example.com", "tok2", false)
 	if err := s.Save(creds); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

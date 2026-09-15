@@ -71,7 +71,7 @@ func Test_Save_preserves_mode_0600_on_rewrite(t *testing.T) {
 
 	// Read-modify-write: remove one, add another, save again.
 	s.Remove("https://wiki.example.com")
-	s.Add("https://other.example.com", "tok2")
+	_ = s.Add("https://other.example.com", "tok2", false)
 	if err := s.Save(path); err != nil {
 		t.Fatalf("second Save error: %v", err)
 	}

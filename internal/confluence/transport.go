@@ -121,7 +121,14 @@ type bearerTransport struct {
 
 func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.store != nil {
-		if token, ok, _ := t.store.Resolve(req.URL.String()); ok && token != "" {
+		token, ok, err := t.store.Resolve(req.URL.String())
+		if err != nil {
+			// A secure credential that cannot be read must not silently
+			// downgrade to an unauthenticated request; surface the error so
+			// the CLI can render the remediation.
+			return nil, err
+		}
+		if ok && token != "" {
 			// Clone to avoid mutating the caller's request (RoundTripper contract).
 			req = req.Clone(req.Context())
 			req.Header.Set("Authorization", "Bearer "+token)

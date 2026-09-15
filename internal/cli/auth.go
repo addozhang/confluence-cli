@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -53,9 +54,10 @@ func newAuthCmd(deps *Deps) *cobra.Command {
 	return cmd
 }
 
-// newAuthAddCmd builds `cfl auth add <url> [--alias <name>]`.
+// newAuthAddCmd builds `cfl auth add <url> [--alias <name>] [--secure-storage]`.
 func newAuthAddCmd(deps *Deps) *cobra.Command {
 	var alias string
+	var secureStorage bool
 	cmd := &cobra.Command{
 		Use:   "add <url>",
 		Short: "Store a Personal Access Token for a Confluence instance",
@@ -65,6 +67,11 @@ func newAuthAddCmd(deps *Deps) *cobra.Command {
 			if err != nil {
 				return cflerrors.WrapURLParse(args[0], err)
 			}
+
+			// --secure-storage wins; CFL_SECURE_STORAGE=1 is the environment
+			// fallback for wrappers that cannot pass flags. Any other value,
+			// including the empty string, means plain file storage.
+			secure := secureStorage || os.Getenv("CFL_SECURE_STORAGE") == "1"
 
 			store, err := deps.LoadStore()
 			if err != nil {
@@ -96,7 +103,10 @@ func newAuthAddCmd(deps *Deps) *cobra.Command {
 			if alias != "" {
 				// AddWithAlias validates the alias and rejects duplicates before
 				// the store is saved.
-				if err := store.AddWithAlias(key, token, alias); err != nil {
+				if err := store.AddWithAlias(key, token, alias, secure); err != nil {
+					if kerr := translateKeyringError(err); kerr != nil {
+						return kerr
+					}
 					return &cflerrors.CFLError{
 						Code:       cflerrors.CodeConfig,
 						Message:    err.Error() + ".",
@@ -104,21 +114,55 @@ func newAuthAddCmd(deps *Deps) *cobra.Command {
 					}
 				}
 			} else {
-				store.Add(key, token)
+				if err := store.Add(key, token, secure); err != nil {
+					return translateKeyringError(err)
+				}
 			}
 			if err := deps.SaveStore(store); err != nil {
 				return err
 			}
+			place := ""
+			if secure {
+				place = " in the OS keyring"
+			}
 			if alias != "" {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Stored token for %s (alias %q)\n", key, alias)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Stored token for %s%s (alias %q)\n", key, place, alias)
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Stored token for %s\n", key)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Stored token for %s%s\n", key, place)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&alias, "alias", "", "short alias for this instance (e.g. prod), usable as --instance <alias>")
+	cmd.Flags().BoolVar(&secureStorage, "secure-storage", false, "store the token in the OS keyring instead of the credentials file")
 	return cmd
+}
+
+// translateKeyringError converts an auth.KeyringError into a CFLError whose
+// suggestion names the next step: a missing keyring entry calls for re-running
+// `auth add --secure-storage`, any other keyring failure calls for re-adding
+// without the flag so the token falls back to the credentials file. It returns
+// nil when err is not a keyring failure, so callers can apply their ordinary
+// error handling.
+func translateKeyringError(err error) error {
+	var ke *auth.KeyringError
+	if !errors.As(err, &ke) {
+		return nil
+	}
+	if ke.Missing {
+		return &cflerrors.CFLError{
+			Code:       cflerrors.CodeConfig,
+			Message:    fmt.Sprintf("No token for %s in the OS keyring.", ke.Key),
+			Suggestion: fmt.Sprintf("Run `cfl auth add %s --secure-storage` again to store it.", ke.Key),
+			Cause:      err,
+		}
+	}
+	return &cflerrors.CFLError{
+		Code:       cflerrors.CodeConfig,
+		Message:    fmt.Sprintf("Could not use the OS keyring for %s.", ke.Key),
+		Suggestion: fmt.Sprintf("Run `cfl auth add %s` without --secure-storage to keep the token in the credentials file.", ke.Key),
+		Cause:      err,
+	}
 }
 
 // newAuthListCmd builds `cfl auth list`.
@@ -132,7 +176,7 @@ func newAuthListCmd(deps *Deps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return output.Write(cmd.OutOrStdout(), schema.NewAuthList(store.List(), store.Aliases()), deps.OutputFormat)
+			return output.Write(cmd.OutOrStdout(), schema.NewAuthList(store.List(), store.Aliases(), store.SecureKeys()), deps.OutputFormat)
 		},
 	}
 }

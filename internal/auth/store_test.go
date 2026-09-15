@@ -152,7 +152,7 @@ func Test_Store_List_sorted(t *testing.T) {
 
 func Test_Store_Add_and_Remove(t *testing.T) {
 	s := NewStore(nil)
-	s.Add("https://wiki.example.com", "tok")
+	_ = s.Add("https://wiki.example.com", "tok", false)
 	if tok, ok, _ := s.Resolve("https://wiki.example.com/x"); !ok || tok != "tok" {
 		t.Fatalf("after Add, Resolve = (%q, %v), want (tok, true)", tok, ok)
 	}
