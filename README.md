@@ -32,6 +32,10 @@ lets you edit it with version-safe updates.
 - Not a Confluence administration tool — no attachment, comment, label, or
   user-management commands; page + space read/write (plus search) is the surface.
 
+## Disclaimer
+
+This project started as a hands-on study of the Confluence RESTful API and as a testbed for driving such a CLI from AI coding agents. Most commands are read-only, but page create/update do perform writes. Use with care in production environments and manage permissions tightly — give the stored PAT the least privilege it needs.
+
 ## Features
 
 - **URL as identity** — every page/space command accepts a Confluence URL
