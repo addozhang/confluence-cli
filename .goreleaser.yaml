@@ -57,23 +57,20 @@ changelog:
       - "^chore:"
       - "Merge pull request"
 
-brews:
+homebrew_casks:
   - name: cfl
     ids:
+      - cfl
+    binaries:
       - cfl
     repository:
       owner: addozhang
       name: homebrew-tap
       # Uses the HOMEBREW_TAP_GITHUB_TOKEN secret in the release workflow.
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
+    directory: Casks
     homepage: "https://github.com/addozhang/confluence-cli"
     description: "URL-native Confluence Server/DC CLI"
-    license: "MIT"
-    install: |
-      bin.install "cfl"
-    test: |
-      system "#{bin}/cfl", "version"
 
 release:
   github:
