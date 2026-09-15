@@ -34,7 +34,8 @@ lets you edit it with version-safe updates.
 
 ## Disclaimer
 
-This project started as a hands-on study of the Confluence RESTful API and as a testbed for driving such a CLI from AI coding agents. Most commands are read-only, but page create/update do perform writes. Use with care in production environments and manage permissions tightly — give the stored PAT the least privilege it needs.
+> [!WARNING]
+> This project started as a hands-on study of the Confluence RESTful API and as a testbed for driving such a CLI from AI coding agents. Most commands are read-only, but page create/update do perform writes. Use with care in production environments and manage permissions tightly — give the stored PAT the least privilege it needs.
 
 ## Features
 
